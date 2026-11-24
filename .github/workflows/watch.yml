@@ -1,0 +1,65 @@
+name: PS5 stock watch
+
+# GitHub's minimum schedule is every 5 minutes (runs often start a few minutes late).
+# Each run keeps checking for RUN_SECONDS, so Sony is polled ~every 30s and JIB ~every 60s.
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:        # "Run workflow" button for a manual test
+
+# never two runs at once; a new one waits for the previous one to finish
+concurrency:
+  group: ps5snipe
+  cancel-in-progress: false
+
+env:
+  RUN_SECONDS: "240"
+  # Powerbuy / Banana / dotlife block GitHub's servers, so only these are checked here.
+  SITES: '--site "Sony Store TH" --site JIB'
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: pip install -r requirements.txt
+
+      - name: Cache Playwright browser
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
+
+      - name: Install Chromium
+        run: python -m playwright install --with-deps chromium
+
+      # state.json remembers what was already announced, so you aren't re-pinged every run
+      - name: Restore state
+        uses: actions/cache/restore@v4
+        with:
+          path: state.json
+          key: ps5state-${{ github.run_id }}
+          restore-keys: ps5state-
+
+      - name: Check stock
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DISCORD_USER_ID: ${{ secrets.DISCORD_USER_ID }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then echo "::error::Add the DISCORD_WEBHOOK_URL secret (Settings > Secrets and variables > Actions)"; exit 1; fi
+          eval python -m ps5snipe $SITES --duration "$RUN_SECONDS" --no-start-message
+
+      - name: Save state
+        if: always() && hashFiles('state.json') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: state.json
+          key: ps5state-${{ github.run_id }}

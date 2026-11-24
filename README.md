@@ -80,6 +80,20 @@ Restart=always
 WantedBy=multi-user.target
 ```
 
+### GitHub Actions (backup while your PC is off)
+
+`.github/workflows/watch.yml` runs every 5 minutes on GitHub and keeps checking **Sony Store TH and JIB**
+for 4 minutes per run (Sony ~every 30s, JIB ~every 60s). Powerbuy/Banana/dotlife block GitHub's servers, so
+they are only covered by your PC.
+
+1. Repo **Settings → Secrets and variables → Actions → New repository secret**: add `DISCORD_WEBHOOK_URL`
+   and `DISCORD_USER_ID`.
+2. The workflow must be on the repo's **default branch** (scheduled workflows only run there).
+3. **Actions** tab → *PS5 stock watch* → **Run workflow** to test it once.
+
+Public repos get unlimited Actions minutes. On a private repo this schedule would use up the free allowance in days.
+To pause it: Actions → PS5 stock watch → ⋯ → Disable workflow.
+
 ## Adding another store
 
 Most shops need no code. Add an entry to `config.yaml`:

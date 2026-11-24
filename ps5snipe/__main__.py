@@ -58,6 +58,9 @@ def main(argv=None) -> int:
     ap.add_argument("--dry-run", action="store_true", help="don't post to Discord, just log")
     ap.add_argument("--debug-dir", help="save HTML+screenshot of pages where stock could not be determined")
     ap.add_argument("--headful", action="store_true", help="show the browser window (helps with Cloudflare)")
+    ap.add_argument("--duration", type=float, default=0,
+                    help="stop after this many seconds (for scheduled runs, e.g. GitHub Actions)")
+    ap.add_argument("--no-start-message", action="store_true", help="don't post the 'started' message to Discord")
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args(argv)
 
@@ -103,7 +106,8 @@ def main(argv=None) -> int:
 
     if not args.once:
         log.info("watching %d sites: %s", len(sites), ", ".join(s["name"] for s in sites))
-        discord.info(f"👀 ps5snipe started, watching: {', '.join(s['name'] for s in sites)}")
+        if not args.no_start_message:
+            discord.info(f"👀 ps5snipe started, watching: {', '.join(s['name'] for s in sites)}")
 
     lock = threading.Lock()
 
@@ -150,9 +154,13 @@ def main(argv=None) -> int:
         if not products:
             log.warning("%s: no PS5 consoles found on the page(s) - check URLs / run with --debug-dir debug", name)
 
+    deadline = time.time() + args.duration if args.duration > 0 else 0
+
     def loop(group: list):
         """Run each site in `group` whenever its interval is up."""
         while not stop["flag"]:
+            if deadline and time.time() >= deadline:
+                return
             for site in group:
                 if stop["flag"]:
                     break
