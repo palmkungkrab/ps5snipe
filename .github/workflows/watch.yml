@@ -6,10 +6,16 @@ on:
   schedule:
     - cron: "*/5 * * * *"
   workflow_dispatch:        # "Run workflow" button for a manual test
+    inputs:
+      test_sites:
+        description: 'One-off test: comma-separated site names from config.yaml (e.g. "Powerbuy,Banana IT"). Empty = normal watch.'
+        required: false
+        default: ""
 
-# never two runs at once; a new one waits for the previous one to finish
+# never two watch runs at once; a new one waits for the previous one to finish.
+# one-off tests use their own group so they don't get queued behind / cancelled by the schedule.
 concurrency:
-  group: ps5snipe
+  group: ps5snipe-${{ inputs.test_sites != '' && 'test' || 'watch' }}
   cancel-in-progress: false
 
 env:
@@ -53,12 +59,27 @@ jobs:
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           DISCORD_USER_ID: ${{ secrets.DISCORD_USER_ID }}
+          TEST_SITES: ${{ inputs.test_sites }}
         run: |
           if [ -z "$DISCORD_WEBHOOK_URL" ]; then echo "::error::Add the DISCORD_WEBHOOK_URL secret (Settings > Secrets and variables > Actions)"; exit 1; fi
-          eval python -m ps5snipe $SITES --duration "$RUN_SECONDS" --no-start-message
+          if [ -n "$TEST_SITES" ]; then
+            args=(); IFS=',' read -ra names <<< "$TEST_SITES"
+            for n in "${names[@]}"; do args+=(--site "$(echo "$n" | xargs)"); done
+            python -m ps5snipe "${args[@]}" --once -v --debug-dir debug
+          else
+            eval python -m ps5snipe $SITES --duration "$RUN_SECONDS" --no-start-message
+          fi
+
+      - name: Upload debug pages (tests only)
+        if: always() && inputs.test_sites != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-pages
+          path: debug/
+          if-no-files-found: ignore
 
       - name: Save state
-        if: always() && hashFiles('state.json') != ''
+        if: always() && inputs.test_sites == '' && hashFiles('state.json') != ''
         uses: actions/cache/save@v4
         with:
           path: state.json
