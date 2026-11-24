@@ -1,6 +1,6 @@
 name: PS5 stock watch
 
-# GitHub's minimum schedule is every 5 minutes (runs often start a few minutes late).
+GitHub's minimum schedule is every 5 minutes (runs often start a few minutes late). ok
 # Each run keeps checking for RUN_SECONDS, so Sony is polled ~every 30s and JIB ~every 60s.
 on:
   schedule:
