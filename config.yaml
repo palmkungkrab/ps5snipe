@@ -1,0 +1,66 @@
+# ps5snipe configuration
+interval_seconds: 60        # default time between checks of each site (randomised +-15%)
+renotify_minutes: 15        # while something stays in stock, ping again every N minutes (0 = only once)
+notify_sold_out: false      # also post (without ping) when an item sells out again
+warn_after_failures: 5      # post a warning if a site fails/blocks this many times in a row
+state_file: state.json
+
+browser:
+  headless: true            # set false (or use --headful) if a site keeps showing Cloudflare
+  # channel: chrome         # use your installed Google Chrome instead of Playwright's Chromium
+  profile_dir: browser-profile
+  block_images: true
+
+# What counts as a "PS5 console". Defaults live in ps5snipe/matching.py.
+# match:
+#   extra_exclude: ["pro"]   # e.g. ignore the PS5 Pro
+
+# Site types:
+#   shopify : Shopify stores, read via their public products.json feed (no browser needed)
+#   browser : any other shop; a headless Chromium opens the listing page(s), finds PS5
+#             console links, then reads stock from each product page.
+#             Optional per-site keys: product_urls, interval_seconds, wait_ms, max_products,
+#             in_stock_selector / out_of_stock_selector (CSS), watch_all, enabled
+sites:
+  # --- Official Sony Store Thailand (Shopify JSON feed: fast & reliable) ---
+  - name: Sony Store TH      # tested
+    type: shopify
+    interval_seconds: 30
+    urls:
+      - https://store.sony.co.th/collections/playstation
+      - https://store.sony.co.th/collections/console
+
+  # --- Powerbuy (Cloudflare protected: run from a Thai home connection) ---
+  - name: Powerbuy
+    type: browser
+    urls:
+      - https://www.powerbuy.co.th/th/category/game/game-console/playstation
+      - https://www.powerbuy.co.th/en/category/game-vr/game-console/playstation-5
+    # product_urls:          # optional: specific product pages to always check
+    #   - https://www.powerbuy.co.th/th/product/....
+
+  # --- JIB Computer Group (tested: product pages carry schema.org stock data) ---
+  - name: JIB
+    type: browser
+    urls:
+      - https://www.jib.co.th/web/product/product_search/0?str_search=playstation%205
+
+  # --- Banana IT (official PlayStation retailer, Cloudflare protected) ---
+  - name: Banana IT
+    type: browser
+    urls:
+      - https://www.bnn.in.th/th/p/gaming-gear/console/playstation-0
+
+  # --- dotlife (official PlayStation retailer, Cloudflare protected) ---
+  - name: dotlife
+    type: browser
+    urls:
+      - https://www.dotlife.store/digital-lifestyle/gaming-toy/gaming-console.html?page=1&brand%5Bfilter%5D=SONY%2C481
+
+  # --- Lazada (Sony official store). Heavy anti-bot / captcha: experimental ---
+  - name: Lazada
+    type: browser
+    enabled: false
+    wait_ms: 5000
+    urls:
+      - https://www.lazada.co.th/catalog/?q=playstation+5+console
