@@ -1,6 +1,9 @@
 import json
 import time
 
+import pytest
+
+from ps5snipe.__main__ import main, resolve_warn_after
 from ps5snipe.checkers.browser import decide_from_page, guess_from_card, parse_jsonld
 from ps5snipe.matching import Matcher
 from ps5snipe.models import Product
@@ -90,3 +93,17 @@ def test_state_alerts(tmp_path, monkeypatch):
     assert s.just_sold_out(p(False)) is True
     s.save()
     assert State(str(tmp_path / "s.json")).items["https://x/ps5"]["available"] is False
+
+
+def test_resolve_warn_after():
+    assert resolve_warn_after({}, None) == 5
+    assert resolve_warn_after({"warn_after_failures": 7}, None) == 7
+    assert resolve_warn_after({"warn_after_failures": 7}, 10) == 10
+
+
+def test_warn_after_rejects_non_positive(capsys):
+    # --dry-run: if validation ever breaks, --test-notify must not post to a real webhook
+    for bad in ("0", "-3"):
+        with pytest.raises(SystemExit):
+            main(["--warn-after", bad, "--test-notify", "--dry-run"])
+        assert "must be 1 or more" in capsys.readouterr().err

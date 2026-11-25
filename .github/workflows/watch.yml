@@ -67,7 +67,7 @@ jobs:
             for n in "${names[@]}"; do args+=(--site "$(echo "$n" | xargs)"); done
             python -m ps5snipe "${args[@]}" --once -v --debug-dir debug
           else
-            eval python -m ps5snipe $SITES --duration "$RUN_SECONDS" --no-start-message
+            eval python -m ps5snipe $SITES --duration "$RUN_SECONDS" --no-start-message --warn-after 10
           fi
 
       - name: Upload debug pages (tests only)

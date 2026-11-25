@@ -49,6 +49,19 @@ def check_site(site: dict, matcher: Matcher, browser, debug_dir) -> list[Product
     raise ValueError(f"unknown site type {kind!r} for {site.get('name')}")
 
 
+def positive_int(value: str) -> int:
+    """argparse type: a whole number of 1 or more."""
+    n = int(value)
+    if n < 1:
+        raise argparse.ArgumentTypeError("must be 1 or more")
+    return n
+
+
+def resolve_warn_after(cfg: dict, override: int | None) -> int:
+    """--warn-after wins over warn_after_failures in config.yaml (default 5)."""
+    return override if override is not None else int(cfg.get("warn_after_failures", 5))
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="ps5snipe", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("-c", "--config", default="config.yaml")
@@ -61,6 +74,8 @@ def main(argv=None) -> int:
     ap.add_argument("--duration", type=float, default=0,
                     help="stop after this many seconds (for scheduled runs, e.g. GitHub Actions)")
     ap.add_argument("--no-start-message", action="store_true", help="don't post the 'started' message to Discord")
+    ap.add_argument("--warn-after", type=positive_int,
+                    help="warn on Discord after N failures in a row (overrides warn_after_failures)")
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args(argv)
 
@@ -97,7 +112,7 @@ def main(argv=None) -> int:
     state = State(cfg.get("state_file", "state.json"))
     default_interval = float(cfg.get("interval_seconds", 60))
     renotify = float(cfg.get("renotify_minutes", 15))
-    warn_after = int(cfg.get("warn_after_failures", 5))
+    warn_after = resolve_warn_after(cfg, args.warn_after)
     notify_sold_out = bool(cfg.get("notify_sold_out", False))
     next_run = {s["name"]: 0.0 for s in sites}
 

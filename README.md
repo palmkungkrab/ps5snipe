@@ -55,7 +55,7 @@ python -m ps5snipe --site Powerbuy --once -v --debug-dir debug   # troubleshoot 
 What you get:
 - 🟢 an `@you` ping with the product link and price when a console **comes into stock**,
   and again every `renotify_minutes` (default 15) while it stays in stock.
-- ⚠️ a message (no ping) if a site keeps blocking or failing (`warn_after_failures`), so you know it's not being watched.
+- ⚠️ a message (no ping) if a site keeps blocking or failing (`warn_after_failures`, or `--warn-after N` for one run), so you know it's not being watched.
 - 👀 a startup message, so you know it's running.
 
 ### If Powerbuy / Banana show "BLOCKED"
@@ -85,6 +85,10 @@ WantedBy=multi-user.target
 `.github/workflows/watch.yml` runs every 5 minutes on GitHub and keeps checking **Sony Store TH and JIB**
 for 4 minutes per run (Sony ~every 30s, JIB ~every 60s). Powerbuy/Banana/dotlife block GitHub's servers, so
 they are only covered by your PC.
+
+JIB occasionally blocks a single run: each run gets a fresh GitHub server, and some of their IPs are on JIB's
+blocklist. The next run usually gets a clean IP, so the workflow passes `--warn-after 10` and only warns when JIB
+stays blocked for about 2 runs in a row. `--headful` doesn't help with this kind of block.
 
 1. Repo **Settings → Secrets and variables → Actions → New repository secret**: add `DISCORD_WEBHOOK_URL`
    and `DISCORD_USER_ID`.
@@ -124,7 +128,7 @@ stock, and set `in_stock_selector` / `out_of_stock_selector`.
 | `interval_seconds` | 60 | seconds between checks per site (±15% jitter). Override per site. |
 | `renotify_minutes` | 15 | re-ping while still in stock (0 = once) |
 | `notify_sold_out` | false | post when an item sells out again |
-| `warn_after_failures` | 5 | warn on Discord after N consecutive failures |
+| `warn_after_failures` | 5 | warn on Discord after N consecutive failures (`--warn-after N` overrides it) |
 | `browser.headless` | true | `false` = visible window (same as `--headful`) |
 | `browser.channel` | – | `chrome` / `msedge` to use an installed browser |
 | `match.extra_exclude` | – | extra regexes to ignore, e.g. `["\\bpro\\b"]` to skip PS5 Pro |
