@@ -88,7 +88,7 @@ they are only covered by your PC.
 
 JIB occasionally blocks a single run: each run gets a fresh GitHub server, and some of their IPs are on JIB's
 blocklist. The next run usually gets a clean IP, so the workflow passes `--warn-after 10` and only warns when JIB
-stays blocked for about 2 runs in a row. `--headful` doesn't help with this kind of block.
+stays blocked for 2–3 runs in a row (about 10–15 min). `--headful` doesn't help with this kind of block.
 
 1. Repo **Settings → Secrets and variables → Actions → New repository secret**: add `DISCORD_WEBHOOK_URL`
    and `DISCORD_USER_ID`.
