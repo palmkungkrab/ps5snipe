@@ -1,7 +1,9 @@
 name: PS5 stock watch
 
 # GitHub's minimum schedule is every 5 minutes (runs often start a few minutes late). ok
-# Each run keeps checking for RUN_SECONDS, so Sony is polled ~every 30s and JIB ~every 60s.
+# cron-job.org starts a run every 5 minutes. Each run keeps checking for RUN_SECONDS, so Sony is
+# polled ~every 30s and JIB ~every 60s. 6 minutes > 5, so the next run is already checking
+# before this one stops: no blind gap (start-up takes 20-60 s).
 on:
   schedule:
     - cron: "*/5 * * * *"
@@ -12,14 +14,15 @@ on:
         required: false
         default: ""
 
-# never two watch runs at once; a new one waits for the previous one to finish.
-# one-off tests use their own group so they don't get queued behind / cancelled by the schedule.
+# watch runs overlap on purpose: each one gets its own group, so a new run starts up while the
+# previous one is still checking (a drop during the overlap may ping twice - better than a miss).
+# one-off tests share one group, so they queue behind each other and never touch watch runs.
 concurrency:
-  group: ps5snipe-${{ inputs.test_sites != '' && 'test' || 'watch' }}
+  group: ps5snipe-${{ inputs.test_sites != '' && 'test' || format('watch-{0}', github.run_id) }}
   cancel-in-progress: false
 
 env:
-  RUN_SECONDS: "240"
+  RUN_SECONDS: "360"
   # Powerbuy / Banana / dotlife block GitHub's servers, so only these are checked here.
   SITES: '--site "Sony Store TH" --site JIB'
 
