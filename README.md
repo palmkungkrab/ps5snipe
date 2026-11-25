@@ -101,11 +101,19 @@ blocked Sony run is enough to warn. `--headful` doesn't help with this kind of b
 
 1. Repo **Settings → Secrets and variables → Actions → New repository secret**: add `DISCORD_WEBHOOK_URL`
    and `DISCORD_USER_ID`.
-2. The workflow must be on the repo's **default branch** (scheduled workflows only run there).
+2. The workflow must be on the repo's **default branch**.
 3. **Actions** tab → *PS5 stock watch* → **Run workflow** to test it once.
+4. GitHub's own `schedule` trigger almost never fires, so the workflow doesn't use it. Instead a free
+   [cron-job.org](https://cron-job.org) job starts it every 5 minutes:
+   - URL: `https://api.github.com/repos/<owner>/ps5snipe/actions/workflows/watch.yml/dispatches`, method POST
+   - Headers: `Authorization: Bearer <GitHub token>` (a classic token needs the `repo` scope) and
+     `Accept: application/vnd.github+json`
+   - Body: `{"ref":"main"}`
+   - Schedule: Custom, crontab `4,9,14,19,24,29,34,39,44,49,54,59 * * * *`. Every 5 minutes, but started
+     a minute early, so the moment two runs overlap lands on the :00/:05/:10 marks.
 
 Public repos get unlimited Actions minutes. On a private repo this schedule would use up the free allowance in days.
-To pause it: Actions → PS5 stock watch → ⋯ → Disable workflow.
+To pause it: disable the cron-job.org job (or Actions → PS5 stock watch → ⋯ → Disable workflow).
 
 ## Adding another store
 

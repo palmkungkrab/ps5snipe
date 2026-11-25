@@ -1,13 +1,11 @@
 name: PS5 stock watch
 
-# GitHub's minimum schedule is every 5 minutes (runs often start a few minutes late). ok
-# cron-job.org starts a run every 5 minutes. Each run keeps checking for RUN_SECONDS, so Sony is
-# polled ~every 30s and JIB ~every 60s. 6 minutes > 5, so the next run is already checking
-# before this one stops: no blind gap (start-up takes 20-60 s).
+# cron-job.org starts a run every 5 minutes through the workflow_dispatch API. (GitHub's own
+# `schedule` trigger is not used: it fired about 1 run in 138.) Each run keeps checking for
+# RUN_SECONDS, so Sony is polled ~every 30s and JIB ~every 60s. 6 minutes > 5, so the next run is
+# already checking before this one stops: no blind gap (start-up takes 20-60 s).
 on:
-  schedule:
-    - cron: "*/5 * * * *"
-  workflow_dispatch:        # "Run workflow" button for a manual test
+  workflow_dispatch:        # cron-job.org, or the "Run workflow" button for a manual test
     inputs:
       test_sites:
         description: 'One-off test: comma-separated site names from config.yaml (e.g. "Powerbuy,Banana IT"). Empty = normal watch.'

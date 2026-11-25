@@ -26,6 +26,15 @@ def test_watch_runs_get_their_own_group_and_tests_share_one():
     assert group == "ps5snipe-${{ inputs.test_sites != '' && 'test' || format('watch-{0}', github.run_id) }}"
 
 
+def test_only_cron_job_org_starts_watch_runs():
+    # GitHub's own schedule fired ~1 in 138 runs; with overlap on, each such run is a 3rd
+    # watcher. cron-job.org calls the workflow_dispatch API instead.
+    wf = load()
+    triggers = wf.get("on", wf.get(True))  # PyYAML reads the bare `on:` key as True
+    assert "schedule" not in triggers
+    assert "workflow_dispatch" in triggers
+
+
 def test_running_watch_runs_are_never_cancelled():
     assert load()["concurrency"]["cancel-in-progress"] is False
 
