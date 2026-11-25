@@ -3,7 +3,7 @@ import time
 
 import pytest
 
-from ps5snipe.__main__ import main, resolve_warn_after
+from ps5snipe.__main__ import blocked_warning, main, resolve_warn_after
 from ps5snipe.checkers.browser import decide_from_page, guess_from_card, parse_jsonld
 from ps5snipe.matching import Matcher
 from ps5snipe.models import Product
@@ -107,3 +107,13 @@ def test_warn_after_rejects_non_positive(capsys):
         with pytest.raises(SystemExit):
             main(["--warn-after", bad, "--test-notify", "--dry-run"])
         assert "must be 1 or more" in capsys.readouterr().err
+
+
+def test_blocked_warning_text():
+    err = "bot protection on https://www.jib.co.th/x (HTTP 403)"
+    msg = blocked_warning("JIB", err, 10)
+    assert msg.startswith("⚠️ JIB has blocked the checker 10 checks in a row (")
+    assert err in msg
+    assert "NOT being watched" in msg
+    assert "home connection" in msg
+    assert "--headful" not in msg

@@ -62,6 +62,13 @@ def resolve_warn_after(cfg: dict, override: int | None) -> int:
     return override if override is not None else int(cfg.get("warn_after_failures", 5))
 
 
+def blocked_warning(name: str, error: object, fails: int) -> str:
+    """Discord text when a site has blocked the checker `fails` times in a row."""
+    return (f"⚠️ {name} has blocked the checker {fails} checks in a row ({error}). It is NOT being watched "
+            f"right now. Usually the server's IP is on the site's blocklist, which clears when the IP changes. "
+            f"If it keeps happening, run ps5snipe from a home connection.")
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="ps5snipe", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("-c", "--config", default="config.yaml")
@@ -136,8 +143,7 @@ def main(argv=None) -> int:
                 fails = state.site_result(name, False, str(e))
             log.warning("%s: BLOCKED (%s) [%d in a row]", name, e, fails)
             if fails == warn_after:
-                discord.info(f"⚠️ {name} keeps blocking the checker ({e}). It is NOT being watched "
-                             f"right now; try running with --headful or from a home connection.")
+                discord.info(blocked_warning(name, e, fails))
             return
         except Exception as e:
             with lock:
