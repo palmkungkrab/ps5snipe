@@ -170,6 +170,8 @@ def main(argv=None) -> int:
                     discord.in_stock(p)
                 elif notify_sold_out and state.just_sold_out(p):
                     discord.sold_out(p)
+            if site.get("type") == "shopify":  # the feed lists every product; browser listings are capped
+                state.mark_gone(name, {p.url for p in products})
             state.save()
         log.info("%s: %d consoles (%d in stock, %d sold out, %d unknown) in %.1fs",
                  name, len(products), summary[True], summary[False], summary[None], time.time() - t0)

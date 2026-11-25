@@ -49,6 +49,17 @@ class State:
             return True
         return False
 
+    def mark_gone(self, site: str, seen_urls: set) -> None:
+        """Products of `site` missing from a complete feed can't be bought: count them as sold out,
+        so they ping again the moment they come back. An empty feed is a hiccup, not a sell-out."""
+        if not seen_urls:
+            return
+        now = time.time()
+        for url, rec in self.items.items():
+            if rec.get("site") == site and url not in seen_urls and rec.get("available") is True:
+                rec["available"] = False
+                rec["went_out"] = now
+
     def just_sold_out(self, p: Product) -> bool:
         rec = self.items.get(p.url, {})
         return p.available is False and rec.get("went_out", 0) >= rec.get("seen", 0) - 1

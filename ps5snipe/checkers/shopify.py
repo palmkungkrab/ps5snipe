@@ -52,6 +52,9 @@ def check(site: dict, matcher: Matcher, session: requests.Session | None = None)
                     available=bool(buyable),
                     price=(f"฿{prices[0]}" if prices else None),
                     reason=f"shopify variants available={len(buyable)}/{len(variants)}",
+                    # Shopify cart permalink: adds the variant and goes straight to checkout
+                    # https://shopify.dev/docs/apps/build/checkout/create-cart-permalinks
+                    buy_url=(f"{base}/cart/{buyable[0]['id']}:1" if buyable else None),
                 )
             if len(items) < 250:
                 break

@@ -60,8 +60,9 @@ class Discord:
             ],
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
+        buy = f"\n⚡ **Buy now (straight to checkout):** {p.buy_url}" if p.buy_url else ""
         return self._post({
-            "content": f"{self._mention()}🟢 **PS5 IN STOCK at {p.site}!** {p.url}",
+            "content": f"{self._mention()}🟢 **PS5 IN STOCK at {p.site}!** {p.url}{buy}",
             "embeds": [embed],
             "allowed_mentions": self._allowed(),
         })

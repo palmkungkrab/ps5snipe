@@ -17,6 +17,7 @@ class Product:
     price: Optional[str] = None
     reason: str = ""  # how availability was decided (for logs / debugging)
     extra: dict = field(default_factory=dict)
+    buy_url: Optional[str] = None  # one-tap link that puts it in the cart and opens checkout
 
     @property
     def status(self) -> str:
