@@ -23,8 +23,10 @@ browser:
 #             in_stock_selector / out_of_stock_selector (CSS), watch_all, enabled
 sites:
   # --- Official Sony Store Thailand (Shopify JSON feed: fast & reliable) ---
-  # Off for the home PC: the feed answers HTTP 429 "too many requests" from our home IP even on the first
-  # request (tested 2026-11-25). GitHub Actions still checks it, because --site ignores `enabled`.
+  # Off for the home PC: the feed answers HTTP 429 "too many requests" from our home IP. Tested 2026-11-25:
+  # 429 on the first request, 200 once at 15:07, then 429 again on the first request of a 20 s trial at 15:18.
+  # The home IP is also the one used to check out by hand, so don't poll Sony from it while it's limited.
+  # GitHub Actions still checks it, because --site ignores `enabled` (and uses interval_seconds below).
   - name: Sony Store TH      # tested
     type: shopify
     enabled: false
