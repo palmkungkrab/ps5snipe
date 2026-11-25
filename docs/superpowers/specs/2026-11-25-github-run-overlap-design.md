@@ -37,7 +37,8 @@ first seen on the first check after one).
     yet), so there are two interleaved state chains. Effect: re-notify pings may also double.
   - Sony gets ~12 checks per run, so with `--warn-after 10` a single blocked Sony run posts the
     blocked warning (no @mention; Sony has never been blocked on GitHub). JIB (~6 checks per
-    run) still needs about 2 blocked runs, as before.
+    run) needs 2 blocked runs from the same state chain, i.e. runs N and N+2 (amended after
+    final review: two back-to-back blocked runs sit on different chains and don't warn).
 - Test: `tests/test_workflow.py` reads `watch.yml` and checks the run length, the per-run
   group for watch runs, the shared group for tests, and that the timeout leaves room.
 

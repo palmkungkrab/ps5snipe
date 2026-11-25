@@ -89,12 +89,15 @@ WantedBy=multi-user.target
 ### GitHub Actions (backup while your PC is off)
 
 `.github/workflows/watch.yml` runs every 5 minutes on GitHub and keeps checking **Sony Store TH and JIB**
-for 4 minutes per run (Sony ~every 30s, JIB ~every 60s). Powerbuy/Banana/dotlife block GitHub's servers, so
-they are only covered by your PC.
+for 6 minutes per run (Sony ~every 30s, JIB ~every 60s). Runs overlap on purpose: the next one is already
+checking before the previous one stops, so there is no blind gap between runs (a drop during the overlap may
+ping twice). Powerbuy/Banana/dotlife block GitHub's servers, so they are only covered by your PC.
 
 JIB occasionally blocks a single run: each run gets a fresh GitHub server, and some of their IPs are on JIB's
-blocklist. The next run usually gets a clean IP, so the workflow passes `--warn-after 10` and only warns when JIB
-stays blocked for 2–3 runs in a row (about 10–15 min). `--headful` doesn't help with this kind of block.
+blocklist. The next run usually gets a clean IP, so the workflow passes `--warn-after 10`. Because runs
+overlap, each run continues the failure count of the run *two* back, so the JIB warning comes when two
+alternate runs are blocked (in a lasting block, about 10–15 min in). Sony gets ~12 checks per run, so one fully
+blocked Sony run is enough to warn. `--headful` doesn't help with this kind of block.
 
 1. Repo **Settings → Secrets and variables → Actions → New repository secret**: add `DISCORD_WEBHOOK_URL`
    and `DISCORD_USER_ID`.

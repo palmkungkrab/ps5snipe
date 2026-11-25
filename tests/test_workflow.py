@@ -17,15 +17,17 @@ def test_runs_check_long_enough_to_overlap():
     assert int(load()["env"]["RUN_SECONDS"]) >= SPACING + SLOWEST_STARTUP
 
 
-def test_watch_runs_never_wait_for_each_other():
-    conc = load()["concurrency"]
-    assert "github.run_id" in conc["group"]  # each watch run is alone in its group
-    assert conc["cancel-in-progress"] is False
-
-
-def test_one_off_tests_keep_a_shared_queue():
+def test_watch_runs_get_their_own_group_and_tests_share_one():
+    # Pinned exactly: flipping != or swapping the branches would put watch runs back in one
+    # shared queue (blind gap returns) and still contain all the same words.
+    # cron-job.org / schedule runs have no test_sites input; GitHub compares loosely, so a
+    # missing input equals '' -> per-run group. A one-off test ("Powerbuy") -> shared 'test'.
     group = load()["concurrency"]["group"]
-    assert "inputs.test_sites" in group and "'test'" in group
+    assert group == "ps5snipe-${{ inputs.test_sites != '' && 'test' || format('watch-{0}', github.run_id) }}"
+
+
+def test_running_watch_runs_are_never_cancelled():
+    assert load()["concurrency"]["cancel-in-progress"] is False
 
 
 def test_timeout_leaves_room_for_startup_and_save():
