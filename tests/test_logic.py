@@ -116,4 +116,6 @@ def test_blocked_warning_text():
     assert err in msg
     assert "NOT being watched" in msg
     assert "home connection" in msg
-    assert "--headful" not in msg
+    # --headful is advice for a home PC only (Cloudflare challenge), never for a GitHub IP block
+    assert "On GitHub this is usually a blocked server IP" in msg
+    assert "On a home PC, run once with --headful" in msg

@@ -32,8 +32,11 @@ fingerprint is identical in OK and blocked runs, and the 403 arrives on the firs
   (`state.save()` runs in `main()`'s `finally`, and the workflow caches `state.json`).
 - Blocked warning text becomes:
   `⚠️ {name} has blocked the checker {fails} checks in a row ({e}). It is NOT being watched
-  right now. Usually the server's IP is on the site's blocklist, which clears when the IP
-  changes. If it keeps happening, run ps5snipe from a home connection.`
+  right now. On GitHub this is usually a blocked server IP that clears on the next run; if it
+  keeps happening, run ps5snipe from a home connection. On a home PC, run once with --headful
+  to get past the check.`
+  (Revised after final review: the PC shares this message, and there a Cloudflare challenge
+  also raises SiteBlocked, where `--headful` is the right fix.)
 - Known side effect: Sony on GitHub (30s interval) would warn after about 5 min of failure
   instead of about 2.5. Acceptable: Sony has never failed so far.
 - README: document `--warn-after` and why the workflow uses 10.

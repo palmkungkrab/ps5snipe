@@ -65,8 +65,9 @@ def resolve_warn_after(cfg: dict, override: int | None) -> int:
 def blocked_warning(name: str, error: object, fails: int) -> str:
     """Discord text when a site has blocked the checker `fails` times in a row."""
     return (f"⚠️ {name} has blocked the checker {fails} checks in a row ({error}). It is NOT being watched "
-            f"right now. Usually the server's IP is on the site's blocklist, which clears when the IP changes. "
-            f"If it keeps happening, run ps5snipe from a home connection.")
+            f"right now. On GitHub this is usually a blocked server IP that clears on the next run; if it keeps "
+            f"happening, run ps5snipe from a home connection. On a home PC, run once with --headful to get past "
+            f"the check.")
 
 
 def main(argv=None) -> int:
