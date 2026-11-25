@@ -23,16 +23,20 @@ browser:
 #             in_stock_selector / out_of_stock_selector (CSS), watch_all, enabled
 sites:
   # --- Official Sony Store Thailand (Shopify JSON feed: fast & reliable) ---
+  # Off for the home PC: the feed answers HTTP 429 "too many requests" from our home IP even on the first
+  # request (tested 2026-11-25). GitHub Actions still checks it, because --site ignores `enabled`.
   - name: Sony Store TH      # tested
     type: shopify
+    enabled: false
     interval_seconds: 30
     urls:
       - https://store.sony.co.th/collections/playstation
       - https://store.sony.co.th/collections/console
 
-  # --- Powerbuy (Cloudflare protected: run from a Thai home connection) ---
+  # --- Powerbuy: off. Cloudflare blocks automated checks even from a Thai home connection (tested 2026-11-25) ---
   - name: Powerbuy
     type: browser
+    enabled: false
     urls:
       - https://www.powerbuy.co.th/th/category/game/game-console/playstation
       - https://www.powerbuy.co.th/en/category/game-vr/game-console/playstation-5
@@ -40,20 +44,24 @@ sites:
     #   - https://www.powerbuy.co.th/th/product/....
 
   # --- JIB Computer Group (tested: product pages carry schema.org stock data) ---
+  # Off for the home PC: GitHub Actions already checks JIB (--site ignores `enabled`); watching it from
+  # both places would ping twice for one restock.
   - name: JIB
     type: browser
+    enabled: false
     urls:
       - https://www.jib.co.th/web/product/product_search/0?str_search=playstation%205
 
-  # --- Banana IT (official PlayStation retailer, Cloudflare protected) ---
+  # --- Banana IT (official PlayStation retailer). Blocks GitHub's servers; works from a Thai home connection ---
   - name: Banana IT
     type: browser
     urls:
       - https://www.bnn.in.th/th/p/gaming-gear/console/playstation-0
 
-  # --- dotlife (official PlayStation retailer, Cloudflare protected) ---
+  # --- dotlife: off. Cloudflare blocks automated checks even from a Thai home connection (tested 2026-11-25) ---
   - name: dotlife
     type: browser
+    enabled: false
     urls:
       - https://www.dotlife.store/digital-lifestyle/gaming-toy/gaming-console.html?page=1&brand%5Bfilter%5D=SONY%2C481
 

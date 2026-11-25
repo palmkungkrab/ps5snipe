@@ -5,3 +5,4 @@ __pycache__/
 state.json
 browser-profile/
 debug/
+logs/

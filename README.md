@@ -4,17 +4,19 @@ Watches Thai online stores for **PS5 console** restocks and pings you on **Disco
 
 | Store | How it's checked | Status |
 |---|---|---|
-| [Sony Store TH](https://store.sony.co.th/collections/playstation) | Shopify JSON feed, every ~30s | ✅ tested |
-| [JIB](https://www.jib.co.th/) | headless Chromium + schema.org stock data | ✅ tested |
-| [Powerbuy](https://www.powerbuy.co.th/th/category/game/game-console/playstation) | headless Chromium | ⚠️ Cloudflare: needs a non-datacenter IP |
-| [Banana IT](https://www.bnn.in.th/th/p/gaming-gear/console/playstation-0) | headless Chromium | ⚠️ Cloudflare: needs a non-datacenter IP |
-| [dotlife](https://www.dotlife.store/) | headless Chromium | ⚠️ Cloudflare: needs a non-datacenter IP |
+| [Sony Store TH](https://store.sony.co.th/collections/playstation) | Shopify JSON feed, every ~30s | ✅ works on GitHub Actions; ❌ HTTP 429 from our Thai home IP |
+| [JIB](https://www.jib.co.th/) | headless Chromium + schema.org stock data | ✅ works on GitHub Actions and from home |
+| [Powerbuy](https://www.powerbuy.co.th/th/category/game/game-console/playstation) | headless Chromium | ❌ Cloudflare blocks it even from a Thai home IP (off) |
+| [Banana IT](https://www.bnn.in.th/th/p/gaming-gear/console/playstation-0) | headless Chromium | ✅ from a Thai home IP only (blocks GitHub) |
+| [dotlife](https://www.dotlife.store/) | headless Chromium | ❌ Cloudflare blocks it even from a Thai home IP (off) |
 | Lazada | headless Chromium | 🧪 disabled by default (captcha-heavy) |
 
 Powerbuy, Banana and dotlife are the official PS5 retailers listed on
-[playstation.com/th-th/ps5/buy-now](https://www.playstation.com/th-th/ps5/buy-now/). They block cloud/datacenter IPs,
-so **run ps5snipe on your own PC or a home server in Thailand**. Free cloud runners like GitHub Actions
-will get blocked by Powerbuy.
+[playstation.com/th-th/ps5/buy-now](https://www.playstation.com/th-th/ps5/buy-now/). They block cloud/datacenter IPs.
+Tested 2026-11-25: Banana IT works from a Thai home connection, but Powerbuy and dotlife block automated checks
+even from home, so they are switched off. The current split is **GitHub Actions = Sony Store TH + JIB** and
+**home PC = Banana IT** (the other sites are `enabled: false` in `config.yaml`; GitHub picks its sites with `--site`,
+which ignores `enabled`). Don't watch a site from both places, or one restock pings you twice.
 
 Only **consoles** trigger alerts. Games, controllers, covers, stands, disc drives, VR2 and Portal are ignored
 (see `ps5snipe/matching.py`).
@@ -67,7 +69,11 @@ What you get:
 
 ### Keep it running 24/7
 
-- **Windows:** create a Task Scheduler task "At log on" running `C:\path\to\ps5snipe\.venv\Scripts\python.exe -m ps5snipe`, with "Start in" set to the ps5snipe folder.
+- **Windows:** from an **Administrator** PowerShell run `powershell -ExecutionPolicy Bypass -File setup-windows-task.ps1` once.
+  It creates the task `ps5snipe`: it starts `run-windows.cmd` a minute after boot (no need to log in), never times out,
+  keeps running on battery, and restarts ps5snipe a minute after any exit. Output goes to `logs\ps5snipe.log`.
+  Only one copy can run at a time (they share `browser-profile/`), so `Stop-ScheduledTask -TaskName ps5snipe` before
+  running ps5snipe by hand, and `Start-ScheduledTask -TaskName ps5snipe` afterwards.
 - **Linux / Raspberry Pi:** a systemd service, or simply `tmux` / `screen`:
 
 ```ini
