@@ -128,3 +128,34 @@ def test_in_stock_ping_carries_buy_link(monkeypatch):
     assert "https://shop.test/cart/222:1" in posted[0]["content"]
     assert "Buy now" in posted[0]["content"]
     assert "Buy now" not in posted[1]["content"]  # no link when the store can't do one-tap checkout
+
+
+def test_in_stock_headline_carries_source_label(monkeypatch):
+    sent = []
+    d = notify.Discord("https://discord.test/hook", "42", source="☁️ GitHub")
+    monkeypatch.setattr(d, "_post", lambda payload: sent.append(payload) or True)
+    d.in_stock(Product("Sony Store TH", "PS5", "https://s.test/p", True, price="฿1"))
+    assert sent[0]["content"] == "<@42> 🟢 **PS5 IN STOCK at Sony Store TH!** ☁️ GitHub https://s.test/p"
+
+
+def test_in_stock_headline_without_source_is_unchanged(monkeypatch):
+    sent = []
+    d = notify.Discord("https://discord.test/hook", "42")
+    monkeypatch.setattr(d, "_post", lambda payload: sent.append(payload) or True)
+    d.in_stock(Product("Sony Store TH", "PS5", "https://s.test/p", True, price="฿1"))
+    assert sent[0]["content"] == "<@42> 🟢 **PS5 IN STOCK at Sony Store TH!** https://s.test/p"
+
+
+def test_cli_source_reaches_discord(monkeypatch):
+    seen = {}
+
+    class FakeDiscord:
+        def __init__(self, url, uid, dry_run=False, source=None):
+            seen["source"] = source
+
+        def in_stock(self, p):
+            return True
+
+    monkeypatch.setattr("ps5snipe.__main__.Discord", FakeDiscord)
+    assert main(["--test-notify", "--source", "☁️ GitHub"]) == 0
+    assert seen["source"] == "☁️ GitHub"

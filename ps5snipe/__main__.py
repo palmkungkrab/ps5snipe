@@ -84,6 +84,7 @@ def main(argv=None) -> int:
     ap.add_argument("--no-start-message", action="store_true", help="don't post the 'started' message to Discord")
     ap.add_argument("--warn-after", type=positive_int,
                     help="warn on Discord after N failures in a row (overrides warn_after_failures)")
+    ap.add_argument("--source", help="label shown in the in-stock headline, e.g. '☁️ GitHub'")
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args(argv)
 
@@ -95,7 +96,7 @@ def main(argv=None) -> int:
     load_dotenv()
     cfg = yaml.safe_load(Path(args.config).read_text(encoding="utf-8"))
     discord = Discord(os.environ.get("DISCORD_WEBHOOK_URL"), os.environ.get("DISCORD_USER_ID"),
-                      dry_run=args.dry_run)
+                      dry_run=args.dry_run, source=args.source)
 
     if args.test_notify:
         ok = discord.in_stock(Product("TEST", "Test notification from ps5snipe (not a real restock)",

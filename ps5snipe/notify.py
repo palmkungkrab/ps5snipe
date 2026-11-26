@@ -14,8 +14,10 @@ log = logging.getLogger(__name__)
 
 
 class Discord:
-    def __init__(self, webhook_url: Optional[str], user_id: Optional[str], dry_run: bool = False):
+    def __init__(self, webhook_url: Optional[str], user_id: Optional[str], dry_run: bool = False,
+                 source: Optional[str] = None):
         self.webhook_url = webhook_url
+        self.source = (source or "").strip() or None
         self.user_id = (user_id or "").strip() or None
         self.dry_run = dry_run or not webhook_url
         if not webhook_url:
@@ -61,8 +63,9 @@ class Discord:
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         buy = f"\n⚡ **Buy now (straight to checkout):** {p.buy_url}" if p.buy_url else ""
+        label = f"{self.source} " if self.source else ""
         return self._post({
-            "content": f"{self._mention()}🟢 **PS5 IN STOCK at {p.site}!** {p.url}{buy}",
+            "content": f"{self._mention()}🟢 **PS5 IN STOCK at {p.site}!** {label}{p.url}{buy}",
             "embeds": [embed],
             "allowed_mentions": self._allowed(),
         })

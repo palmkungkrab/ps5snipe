@@ -21,6 +21,7 @@ concurrency:
 
 env:
   RUN_SECONDS: "360"
+  SOURCE_LABEL: "☁️ GitHub"   # shown in the in-stock ping so you can tell GitHub from the laptop
   # Powerbuy / Banana / dotlife block GitHub's servers, so only these are checked here.
   SITES: '--site "Sony Store TH" --site JIB'
 
@@ -66,9 +67,10 @@ jobs:
           if [ -n "$TEST_SITES" ]; then
             args=(); IFS=',' read -ra names <<< "$TEST_SITES"
             for n in "${names[@]}"; do args+=(--site "$(echo "$n" | xargs)"); done
-            python -m ps5snipe "${args[@]}" --once -v --debug-dir debug
+            python -m ps5snipe "${args[@]}" --once -v --debug-dir debug --source "$SOURCE_LABEL"
           else
-            eval python -m ps5snipe $SITES --duration "$RUN_SECONDS" --no-start-message --warn-after 10
+            # eval re-parses the line, so the label needs its own inner quotes to stay one word
+            eval python -m ps5snipe $SITES --duration "$RUN_SECONDS" --no-start-message --warn-after 10 --source '"$SOURCE_LABEL"'
           fi
 
       - name: Upload debug pages (tests only)

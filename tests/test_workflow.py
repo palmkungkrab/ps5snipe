@@ -42,3 +42,11 @@ def test_running_watch_runs_are_never_cancelled():
 def test_timeout_leaves_room_for_startup_and_save():
     wf = load()
     assert wf["jobs"]["watch"]["timeout-minutes"] * 60 >= int(wf["env"]["RUN_SECONDS"]) + 120
+
+
+def test_github_pings_say_they_came_from_github():
+    wf = load()
+    assert wf["env"]["SOURCE_LABEL"] == "☁️ GitHub"
+    run = next(s["run"] for s in wf["jobs"]["watch"]["steps"] if s.get("name") == "Check stock")
+    assert """--source '"$SOURCE_LABEL"'""" in run       # watch line goes through eval
+    assert '--source "$SOURCE_LABEL"' in run             # one-off test line (no eval)
