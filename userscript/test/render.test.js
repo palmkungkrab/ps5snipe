@@ -72,6 +72,15 @@ test('warn view: any other cause names it and asks for one reload, not a human c
   assert.match(h, /Healthchecks: paused/);
 });
 
+test('warn view and needs you without a cause (network error right after a stuck reload) never say "undefined"', () => {
+  const h = PS5W.renderBox({ ...base, mode: 'warn' });
+  assert.match(h, /Powerbuy is NOT being watched: still stuck after a reload\./);
+  assert.doesNotMatch(h, /undefined|human/);
+  const m = PS5W.buildNeedsYou('Powerbuy', '42');
+  assert.match(m.content, /Powerbuy is NOT being watched: still stuck after a reload\./);
+  assert.doesNotMatch(m.content, /undefined/);
+});
+
 test('warn view: the cause is escaped', () => {
   const h = PS5W.renderBox({ ...base, mode: 'warn', why: '<img src=x onerror=alert(1)>' });
   assert.match(h, /NOT being watched: &lt;img src=x onerror=alert\(1\)&gt;/);
