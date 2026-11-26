@@ -28,6 +28,20 @@ PS5W.STORES = {
   powerbuy: { key: 'powerbuy', name: 'Powerbuy', host: 'www.powerbuy.co.th', searchPath: '/th/search/ps5', hcSlug: 'powerbuy' },
   banana: { key: 'banana', name: 'Banana IT', host: 'www.bnn.in.th', searchPath: '/th/p?q=playstation%205', hcSlug: 'banana-it' },
   jib: { key: 'jib', name: 'JIB', host: 'www.jib.co.th', searchPath: '/web/product/product_search/0?str_search=playstation%205', hcSlug: 'jib' },
+  // The page HTML has no products: they come from iStudio's GraphQL feed (cross-origin). It needs the dotlife
+  // store code (without it: 200 and an empty list) and refuses cookies. Gaming Console category, brand SONY.
+  dotlife: {
+    key: 'dotlife',
+    name: 'Dotlife',
+    host: 'www.dotlife.store',
+    searchPath: '/digital-lifestyle/gaming-toy/gaming-console.html?brand%5Bfilter%5D=SONY%2C481',
+    hcSlug: 'dotlife',
+    feed: {
+      url: 'https://apim.istudio.store/graphql',
+      storeCode: 'dth',
+      query: '{products(filter:{category_uid:{eq:"MTY5NQ=="},brand:{eq:"481"}},pageSize:40){total_count items{__typename name url_key url_suffix stock_status only_x_left_in_stock price_range{minimum_price{final_price{value currency}}}}}}',
+    },
+  },
 };
 
 PS5W.storeForHost = function storeForHost(host) {
@@ -36,6 +50,15 @@ PS5W.storeForHost = function storeForHost(host) {
 
 PS5W.watchUrl = function watchUrl(store) {
   return `https://${store.host}${store.searchPath}#ps5watch`;
+};
+
+// A feed store's one request: GET with our query, its store code, and no cookies (the feed refuses them).
+PS5W.feedRequest = function feedRequest(store) {
+  const { url, storeCode, query } = store.feed;
+  return {
+    url: `${url}?query=${encodeURIComponent(query)}`,
+    init: { credentials: 'omit', headers: { Store: storeCode } },
+  };
 };
 
 // ---------------------------------------------------------------- matching
@@ -650,6 +673,51 @@ PS5W.parseBanana = function parseBanana(status, html, origin) {
       price: bananaPrice(a.inner),
       available: !PS5W.OOS_RE.test(text),
       reason: 'search card text',
+    });
+  }
+  return { blocked: false, products: [...byUrl.values()] };
+};
+
+// Dotlife feed reply (JSON). stock_status is what the page's button follows: IN_STOCK shows "ใส่ตะกร้า",
+// OUT_OF_STOCK shows "สินค้าออนไลน์หมด". The category lists sold-out consoles too, so an empty list is not normal.
+const dlShapeOk = (i) => !!i && typeof i === 'object'
+  && nonEmptyString(i.name) && nonEmptyString(i.url_key) && nonEmptyString(i.stock_status);
+const DL_AVAILABLE = { IN_STOCK: true, OUT_OF_STOCK: false };
+
+function dlPrice(item) {
+  const min = item.price_range && item.price_range.minimum_price;
+  const final = min && min.final_price;
+  return PS5W.formatPrice(final ? final.value : null);
+}
+
+PS5W.parseDotlife = function parseDotlife(status, text, origin) {
+  const problem = PS5W.pageProblem(status, text);
+  if (problem) return { blocked: true, why: problem };
+  let reply;
+  try { reply = JSON.parse(String(text)); } catch (e) { return { blocked: true, why: 'dotlife feed is not JSON' }; }
+  if (reply && Array.isArray(reply.errors) && reply.errors.length) {
+    const first = reply.errors[0];
+    return { blocked: true, why: `dotlife feed error: ${first && first.message ? first.message : 'unknown'}` };
+  }
+  const products = reply && reply.data && reply.data.products;
+  const items = products && products.items;
+  if (!Array.isArray(items)) return { blocked: true, why: 'dotlife feed fields changed' };
+  if (!items.length) return { blocked: true, why: 'dotlife feed listed no products' };
+  if (!items.some(dlShapeOk)) return { blocked: true, why: 'dotlife product fields changed' };
+  const byUrl = new Map();
+  for (const i of items) {
+    if (!i || typeof i !== 'object' || !nonEmptyString(i.name) || !nonEmptyString(i.url_key)) continue;
+    if (!PS5W.isConsole(i.name)) continue;
+    const suffix = typeof i.url_suffix === 'string' ? i.url_suffix : '.html';
+    const url = PS5W.normalizeUrl(`${origin}/${i.url_key.trim()}${suffix}`, origin);
+    if (!url || byUrl.has(url)) continue;
+    const known = Object.prototype.hasOwnProperty.call(DL_AVAILABLE, i.stock_status);
+    byUrl.set(url, {
+      title: i.name,
+      url,
+      price: dlPrice(i),
+      available: known ? DL_AVAILABLE[i.stock_status] : null,
+      reason: known ? 'feed stock_status' : 'stock fields missing',
     });
   }
   return { blocked: false, products: [...byUrl.values()] };

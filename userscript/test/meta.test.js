@@ -60,4 +60,7 @@ test('store table', () => {
   assert.equal(PS5W.watchUrl(PS5W.STORES.banana), 'https://www.bnn.in.th/th/p?q=playstation%205#ps5watch');
   assert.equal(PS5W.STORES.jib.hcSlug, 'jib');
   assert.equal(PS5W.STORES.banana.hcSlug, 'banana-it');
+  assert.equal(PS5W.storeForHost('www.dotlife.store').name, 'Dotlife');
+  assert.equal(PS5W.STORES.dotlife.hcSlug, 'dotlife');
+  assert.equal(PS5W.watchUrl(PS5W.STORES.dotlife), 'https://www.dotlife.store/digital-lifestyle/gaming-toy/gaming-console.html?brand%5Bfilter%5D=SONY%2C481#ps5watch');
 });
