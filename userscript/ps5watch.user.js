@@ -318,6 +318,168 @@ PS5W.renderBox = function renderBox(view) {
 <div class="ft"><span${okCls}>${dc} · ${hc}</span><span><button class="b" data-act="test">Test ping</button> <button class="b" data-act="settings">Settings</button></span></div></div>`;
 };
 
+// ---------------------------------------------------------------- shared helpers
+const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+
+function decodeEntities(s) {
+  return String(s).replace(/&(?:#(\d+)|#x([0-9a-f]+)|([a-z]+));/gi, (m, dec, hex, name) => {
+    if (name) return Object.prototype.hasOwnProperty.call(ENTITIES, name.toLowerCase()) ? ENTITIES[name.toLowerCase()] : m;
+    const cp = dec ? parseInt(dec, 10) : parseInt(hex, 16);
+    try { return String.fromCodePoint(cp); } catch (e) { return m; }
+  });
+}
+
+function tagAttrs(tag) {
+  const out = {};
+  const re = /([^\s"'<>\/=]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/g;
+  let m;
+  while ((m = re.exec(tag))) {
+    const k = m[1].toLowerCase();
+    if (!(k in out)) out[k] = decodeEntities(m[2] !== undefined ? m[2] : m[3] !== undefined ? m[3] : m[4]);
+  }
+  return out;
+}
+
+// Every <a href> in raw HTML. label = inner text + title attr + inner alt attrs.
+PS5W.anchors = function anchors(html) {
+  const out = [];
+  const re = /<a\b((?:"[^"]*"|'[^']*'|[^>"'])*)>([\s\S]*?)<\/a\s*>/gi;
+  let m;
+  while ((m = re.exec(String(html || '')))) {
+    const attrs = tagAttrs(m[1]);
+    if (attrs.href === undefined) continue;
+    const alts = [];
+    const imgRe = /<img\b((?:"[^"]*"|'[^']*'|[^>"'])*)>/gi;
+    let im;
+    while ((im = imgRe.exec(m[2]))) {
+      const a = tagAttrs(im[1]).alt;
+      if (a) alts.push(a);
+    }
+    const text = decodeEntities(m[2].replace(/<[^>]*>/g, ' '));
+    const label = [text, attrs.title, ...alts].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+    out.push({ href: attrs.href, label });
+  }
+  return out;
+};
+
+// Absolute http(s) URL without query/hash, or null for anything else.
+PS5W.normalizeUrl = function normalizeUrl(href, origin) {
+  if (typeof href !== 'string') return null;
+  const h = href.trim();
+  if (!h || h.startsWith('#')) return null;
+  try {
+    const u = new URL(h, origin);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+    u.search = '';
+    u.hash = '';
+    return u.href;
+  } catch (e) {
+    return null;
+  }
+};
+
+PS5W.formatPrice = function formatPrice(value) {
+  const s = String(value === null || value === undefined ? '' : value).replace(/[฿,\s]/g, '');
+  if (!/^\d+(\.\d+)?$/.test(s)) return null;
+  const n = Math.round(parseFloat(s));
+  return n > 0 ? `฿${n.toLocaleString('en-US')}` : null;
+};
+
+// Port of BLOCK_TITLES (ps5snipe/checkers/browser.py:41).
+PS5W.BLOCK_TITLES = /just a moment|attention required|access denied|verify you are human|please wait|security check|ddos|captcha|robot/i;
+
+PS5W.isBlockedPage = function isBlockedPage(status, html) {
+  if ([403, 429, 503].includes(status)) return true;
+  const t = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(String(html || ''));
+  return !!t && PS5W.BLOCK_TITLES.test(t[1]);
+};
+
+// ---------------------------------------------------------------- stores: JIB parsers
+PS5W.JIB_GAP_MS = 1500;
+PS5W.JIB_MAX_PRODUCTS = 12;
+
+// Ports of IN_STOCK_SCHEMA / OUT_SCHEMA (browser.py:44-45).
+const IN_STOCK_SCHEMA = ['instock', 'preorder', 'presale', 'limitedavailability', 'onlineonly', 'instoreonly', 'backorder'];
+const OUT_SCHEMA = ['outofstock', 'soldout', 'discontinued'];
+
+function walk(obj, out) {
+  if (Array.isArray(obj)) obj.forEach((v) => walk(v, out));
+  else if (obj && typeof obj === 'object') {
+    out.push(obj);
+    Object.values(obj).forEach((v) => walk(v, out));
+  }
+  return out;
+}
+
+function schemaTypes(node) {
+  const t = node['@type'];
+  return (Array.isArray(t) ? t : [t]).filter((x) => typeof x === 'string').map((x) => x.toLowerCase());
+}
+
+PS5W.decideSchema = function decideSchema(values) {
+  const norm = values.filter(Boolean)
+    .map((v) => String(v).toLowerCase().split('/').pop().replace(/_/g, '').replace(/ /g, ''));
+  if (norm.some((v) => IN_STOCK_SCHEMA.includes(v))) return true;
+  if (norm.some((v) => OUT_SCHEMA.includes(v))) return false;
+  return null;
+};
+
+PS5W.parseJsonld = function parseJsonld(blobs) {
+  const avail = [];
+  let price = null;
+  let name = null;
+  for (const raw of blobs) {
+    let data;
+    try { data = JSON.parse(String(raw).trim()); } catch (e) { continue; }
+    for (const node of walk(data, [])) {
+      const types = schemaTypes(node);
+      if (types.includes('product') || types.includes('productgroup')) name = name || node.name || null;
+      if ('availability' in node) {
+        avail.push(String(node.availability));
+        const p = PS5W.formatPrice(node.price || node.lowPrice);
+        if (p && !price) price = p;
+      }
+    }
+  }
+  return { available: PS5W.decideSchema(avail), price, name };
+};
+
+PS5W.parseJibSearch = function parseJibSearch(status, html, origin, selfUrl) {
+  if (PS5W.isBlockedPage(status, html)) return { blocked: true, why: `JIB search blocked (HTTP ${status})` };
+  const host = new URL(origin).host;
+  const self = PS5W.normalizeUrl(selfUrl || PS5W.STORES.jib.searchPath, origin);
+  const byUrl = new Map();
+  for (const a of PS5W.anchors(html)) {
+    const url = PS5W.normalizeUrl(a.href, origin);
+    if (!url || new URL(url).host !== host || url === self || !PS5W.isConsole(a.label)) continue;
+    const prev = byUrl.get(url);
+    if (!prev || a.label.length > prev.title.length) byUrl.set(url, { url, title: a.label });
+  }
+  return { blocked: false, links: [...byUrl.values()].slice(0, PS5W.JIB_MAX_PRODUCTS) };
+};
+
+PS5W.parseJibProduct = function parseJibProduct(status, html, url, fallbackTitle) {
+  if (PS5W.isBlockedPage(status, html)) return { blocked: true, why: `JIB product blocked (HTTP ${status})` };
+  const src = String(html || '');
+  const blobs = [];
+  const ldRe = /<script\b[^>]*type\s*=\s*["']?application\/ld\+json["']?[^>]*>([\s\S]*?)<\/script>/gi;
+  let m;
+  while ((m = ldRe.exec(src))) blobs.push(m[1]);
+  const ld = PS5W.parseJsonld(blobs);
+  const product = { title: ld.name || fallbackTitle, url, price: ld.price, available: ld.available, reason: 'schema.org JSON-LD' };
+  if (product.available === null) {
+    const micro = [];
+    const tagRe = /<[a-z]+\b(?:"[^"]*"|'[^']*'|[^>"'])*>/gi;
+    while ((m = tagRe.exec(src))) {
+      const attrs = tagAttrs(m[0]);
+      if ((attrs.itemprop || '').toLowerCase() === 'availability') micro.push(attrs.content || attrs.href || '');
+    }
+    product.available = PS5W.decideSchema(micro);
+    product.reason = product.available === null ? 'no stock signal found' : 'schema.org microdata';
+  }
+  return { blocked: false, product };
+};
+
 // ---------------------------------------------------------------- (later tasks add sections here)
 
 // ---------------------------------------------------------------- browser
