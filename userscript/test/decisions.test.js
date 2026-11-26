@@ -55,3 +55,33 @@ test('lockDecision', () => {
   assert.equal(PS5W.lockDecision('x', 'a', now), 'mine');
   assert.equal(PS5W.lockDecision({}, 'a', now), 'mine');
 });
+
+test('firstDelayMs: the first check after a load waits out the normal gap since the last check', () => {
+  const now = 1700000000000;
+  assert.equal(PS5W.firstDelayMs(now - 10000, now, 0.5), 50000);
+  assert.equal(PS5W.firstDelayMs(now - 120000, now, 0.5), 0);
+  assert.equal(PS5W.firstDelayMs(now - 55000, now, 0), 0);
+  assert.equal(PS5W.firstDelayMs(undefined, now, 0.5), 0);
+  assert.equal(PS5W.firstDelayMs(null, now, 0.5), 0);
+  assert.equal(PS5W.firstDelayMs(NaN, now, 0.5), 0);
+  assert.equal(PS5W.firstDelayMs(Infinity, now, 0.5), 0);
+  assert.equal(PS5W.firstDelayMs('1699999990000', now, 0.5), 0);
+});
+
+test('isWatcherLocation: #ps5watch on the store watch path only (query ignored)', () => {
+  const loc = (pathname, hash, search = '') => ({ pathname, hash, search });
+  const pb = PS5W.STORES.powerbuy;
+  assert.equal(PS5W.isWatcherLocation(loc('/th/search/ps5', '#ps5watch'), pb), true);
+  assert.equal(PS5W.isWatcherLocation(loc('/th/search/ps5', ''), pb), false);
+  assert.equal(PS5W.isWatcherLocation(loc('/th/search/ps5', '#other'), pb), false);
+  assert.equal(PS5W.isWatcherLocation(loc('/th/product/x', '#ps5watch'), pb), false);
+  assert.equal(PS5W.isWatcherLocation(loc('/th/cart', '#ps5watch'), pb), false);
+  assert.equal(PS5W.isWatcherLocation(loc('/th/search/ps5', '#ps5watch', '?sort=price'), pb), true);
+  const bn = PS5W.STORES.banana;
+  assert.equal(PS5W.isWatcherLocation(loc('/th/p', '#ps5watch', '?q=playstation+5'), bn), true);
+  assert.equal(PS5W.isWatcherLocation(loc('/th/p/ps5-slim-console', '#ps5watch'), bn), false);
+  const jib = PS5W.STORES.jib;
+  assert.equal(PS5W.isWatcherLocation(loc('/web/product/product_search/0', '#ps5watch', '?str_search=ps5'), jib), true);
+  assert.equal(PS5W.isWatcherLocation(loc('/web/product/readProduct/82892/1652/x', '#ps5watch'), jib), false);
+  assert.equal(PS5W.isWatcherLocation(loc('/th/search/ps5', '#ps5watch'), jib), false);
+});

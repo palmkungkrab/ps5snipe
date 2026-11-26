@@ -158,6 +158,17 @@ PS5W.lockDecision = function lockDecision(lock, myId, now) {
   return now - lock.ts > PS5W.LOCK_STALE_MS ? 'mine' : 'other';
 };
 
+// First check after a page load (including the block reload): wait out a normal gap since the last check started.
+PS5W.firstDelayMs = function firstDelayMs(lastCheckAt, now, random) {
+  if (!Number.isFinite(lastCheckAt)) return 0;
+  return Math.max(0, lastCheckAt + PS5W.nextDelayMs('normal', random) - now);
+};
+
+// A tab watches only on its store's watch page with #ps5watch. Path only: stores may rewrite the query.
+PS5W.isWatcherLocation = function isWatcherLocation(loc, store) {
+  return loc.hash === '#ps5watch' && loc.pathname === new URL(PS5W.watchUrl(store)).pathname;
+};
+
 // ---------------------------------------------------------------- messages
 // Payloads mirror ps5snipe/notify.py (Discord.in_stock / info).
 PS5W.LABEL = '💻 laptop';
@@ -785,16 +796,23 @@ function bootstrap() {
   const pill = (text) => paint(PS5W.renderBox({ mode: 'pill', storeName: store.name, pillText: text }));
 
   // Any other tab of the store (shopping, checkout): never checks, never reloads, never touches the title.
-  if (location.hash !== '#ps5watch') {
-    const showPill = () => pill(lockNow() === 'other' ? 'PS5 watch running in another tab' : 'PS5 watch: no watcher tab open');
-    showPill();
-    setInterval(showPill, OTHER_RETRY_MS);
+  const showOtherPill = () => pill(lockNow() === 'other' ? 'PS5 watch running in another tab' : 'PS5 watch: no watcher tab open');
+  const asNonWatcher = () => {
+    showOtherPill();
+    setInterval(showOtherPill, OTHER_RETRY_MS);
+  };
+  const onWatchPage = () => PS5W.isWatcherLocation(location, store);
+  if (!onWatchPage()) {
+    asNonWatcher();
     return;
   }
 
+  const LAST_CHECK_KEY = 'ps5watch-last-check'; // start time of the last check; survives the block reload
   let holding = false; // this tab owns the lock
+  let left = false; // the tab moved off the watch page (in-page navigation): it never watches again
   let heartbeat = null;
   let running = false; // the check loop is scheduled or in flight
+  let loopTimer = null;
   let settingsTimer = null;
   let editing = false; // the settings form is on screen: loop renders update the title only
   let shown = null; // view currently drawn
@@ -808,6 +826,7 @@ function bootstrap() {
       : PS5W.renderBox(view));
   };
   const setupView = (settings, errors) => ({ mode: 'setup', storeName: store.name, settings, errors });
+  const waitingView = () => ({ mode: 'ok', storeName: store.name, lastCheck: null, products: [], discordOk: true, hcOk: true });
 
   function gmRequest(details) {
     return new Promise((resolve, reject) => {
@@ -853,8 +872,16 @@ function bootstrap() {
         return false;
       }
     },
-    reload: () => location.reload(),
+    reload: () => {
+      // Never reload a page Palm moved to inside this tab (product, cart, checkout).
+      if (!onWatchPage()) {
+        leave();
+        return;
+      }
+      location.reload();
+    },
     render: (view) => {
+      if (left) return;
       document.title = PS5W.tabTitle(view.mode, store.name);
       if (view.mode === 'setup') {
         editing = true;
@@ -874,10 +901,35 @@ function bootstrap() {
     setTimeout(claim, OTHER_RETRY_MS);
   }
 
+  // The tab moved off the watch page without a page load: stop for good, free our lock, never reload.
+  function leave() {
+    if (left) return;
+    left = true;
+    holding = false;
+    running = false;
+    clearTimeout(loopTimer);
+    clearTimeout(settingsTimer);
+    clearInterval(heartbeat);
+    write(() => {
+      const lock = JSON.parse(localStorage.getItem(LOCK_KEY));
+      if (lock && lock.id === tabId) localStorage.removeItem(LOCK_KEY);
+    });
+    asNonWatcher();
+  }
+
   async function tick() {
+    loopTimer = null;
+    if (!onWatchPage()) {
+      leave();
+      return;
+    }
     if (lockNow() !== 'mine') {
       stopHolding();
       return;
+    }
+    // Stamp the start before any fetch, so a reload mid-check still spaces the next one.
+    if (!PS5W.cleanSettings(readSettings()).errors.length) {
+      write(() => sessionStorage.setItem(LAST_CHECK_KEY, String(Date.now())));
     }
     let r;
     try {
@@ -887,7 +939,7 @@ function bootstrap() {
     }
     if (!holding) return;
     if (r) {
-      setTimeout(tick, r.delayMs);
+      loopTimer = setTimeout(tick, r.delayMs);
     } else {
       running = false; // reloading, or waiting for settings (another tab may save them)
       clearTimeout(settingsTimer);
@@ -895,10 +947,17 @@ function bootstrap() {
     }
   }
 
+  // First check: at once on a fresh tab, otherwise a normal gap after the last check started (block reload included).
   function start() {
     if (running || !holding) return;
     running = true;
-    tick();
+    const delay = PS5W.firstDelayMs(readJson(() => sessionStorage, LAST_CHECK_KEY, undefined), Date.now(), Math.random());
+    if (delay <= 0) {
+      tick();
+      return;
+    }
+    if (!editing) draw(lastWatch || waitingView());
+    loopTimer = setTimeout(tick, delay);
   }
 
   function waitForSettings() {
@@ -912,6 +971,11 @@ function bootstrap() {
   }
 
   function claim() {
+    if (left) return;
+    if (!onWatchPage()) {
+      leave();
+      return;
+    }
     if (lockNow() !== 'mine') {
       pill('PS5 watch already watching in another tab');
       setTimeout(claim, OTHER_RETRY_MS);
@@ -934,7 +998,7 @@ function bootstrap() {
     }
     write(() => GM_setValue('settings', settings));
     editing = false;
-    draw(lastWatch || { mode: 'ok', storeName: store.name, lastCheck: null, products: [], discordOk: true, hcOk: true });
+    draw(lastWatch || waitingView());
     start();
     return true;
   }
