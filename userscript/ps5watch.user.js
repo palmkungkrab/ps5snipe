@@ -74,6 +74,53 @@ PS5W.isConsole = function isConsole(title) {
   return !PS5W.DEFAULT_EXCLUDE.some((r) => r.test(t));
 };
 
+// ---------------------------------------------------------------- alerts
+// Port of ps5snipe/state.py should_alert + mark_gone. Pure: returns new objects.
+PS5W.RENOTIFY_MS = 900000;
+
+PS5W.nextAlerts = function nextAlerts(items, products, now, renotifyMs) {
+  const out = {};
+  for (const url of Object.keys(items || {})) out[url] = { ...items[url] };
+  const alerts = [];
+  const seen = new Set();
+  for (const p of products) {
+    seen.add(p.url);
+    const was = out[p.url] ? out[p.url].available : undefined;
+    const rec = { ...(out[p.url] || {}), title: p.title, seen: now };
+    out[p.url] = rec;
+    if (p.available === null || p.available === undefined) {
+      if (!('available' in rec)) rec.available = null;
+      continue;
+    }
+    rec.available = p.available;
+    if (p.available !== true) {
+      if (was === true) rec.wentOut = now;
+      continue;
+    }
+    if (was !== true || (renotifyMs > 0 && now - (rec.notified || 0) >= renotifyMs)) {
+      rec.notified = now;
+      alerts.push(p);
+    }
+  }
+  // After a good check, a known in-stock URL that vanished from the list can't be bought.
+  // Unlike Python's mark_gone this applies to an empty list too (Banana lists only buyable items).
+  for (const url of Object.keys(out)) {
+    if (!seen.has(url) && out[url].available === true) {
+      out[url].available = false;
+      out[url].wentOut = now;
+    }
+  }
+  return { items: out, alerts };
+};
+
+PS5W.loadItems = function loadItems(value) {
+  let v = value;
+  if (typeof v === 'string') {
+    try { v = JSON.parse(v); } catch (e) { return {}; }
+  }
+  return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+};
+
 // ---------------------------------------------------------------- (later tasks add sections here)
 
 // ---------------------------------------------------------------- browser
