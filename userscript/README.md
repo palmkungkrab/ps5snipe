@@ -14,9 +14,14 @@ Healthchecks tells you when a tab stops checking in.
 1. Make a free account at [healthchecks.io](https://healthchecks.io).
 2. Make three checks. Use exactly these names: `powerbuy`, `banana-it`, `jib`.
 3. For each check, set **Period** to 5 minutes and **Grace** to 5 minutes.
-4. Open **Settings → Ping key** and copy the project's **ping key**. Do not copy a full check URL.
-   The script pings `https://hc-ping.com/<ping key>/<name>` by itself.
-5. Add the **Discord** integration (Healthchecks asks Discord for permission).
+4. **Set each check's Slug** to the same word (`powerbuy`, `banana-it`, `jib`). Renaming a check does
+   not set its slug. Check it: on the Checks page click **slug** in the "Ping URL" header. Each row
+   must end in `/powerbuy`, `/banana-it` or `/jib`, not "slug not set". If a slug is missing, the box
+   shows **Healthchecks ✗**.
+5. Open **Settings → Ping key** and copy the project's **ping key** (about 22 characters). Do not
+   copy a full check URL or a check's 36-character ID.
+   The script pings `https://hc-ping.com/<ping key>/<slug>` by itself.
+6. Add the **Discord** integration (Healthchecks asks Discord for permission).
    Every message in your channel buzzes your phone, so the built-in alert is enough.
 
 ## 2. Install the script on the laptop
