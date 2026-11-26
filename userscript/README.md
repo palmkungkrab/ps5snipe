@@ -42,7 +42,7 @@ That ending is what tells the script "this tab is a watcher".
 | Powerbuy | `https://www.powerbuy.co.th/th/search/ps5#ps5watch` |
 | Banana IT | `https://www.bnn.in.th/th/p?q=playstation%205#ps5watch` |
 | JIB | `https://www.jib.co.th/web/product/product_search/0?str_search=playstation%205#ps5watch` |
-| Dotlife | `https://www.dotlife.store/digital-lifestyle/gaming-toy/gaming-console.html?brand%5Bfilter%5D=SONY%2C481#ps5watch` |
+| Dotlife | `https://www.dotlife.store/digital-lifestyle/gaming-toy/gaming-console.html?brand%5Bfilter%5D=SONY%2C481&page=1#ps5watch` |
 
 Open each bookmark in its own tab. Leave the four tabs open.
 
@@ -62,8 +62,8 @@ new link here (and into `.env`).
 
 ## 5. Set up Chrome
 
-1. **Settings → Performance → Always keep these sites active.** Add `powerbuy.co.th`, `bnn.in.th`
-   and `jib.co.th`. ([Chrome help](https://support.google.com/chrome/answer/12929150))
+1. **Settings → Performance → Always keep these sites active.** Add `powerbuy.co.th`, `bnn.in.th`,
+   `jib.co.th` and `dotlife.store`. ([Chrome help](https://support.google.com/chrome/answer/12929150))
 2. **Settings → On startup → Continue where you left off.**
 3. Make sure Chrome starts when you sign in to Windows.
    Then after a reboot and a sign-in, the watcher tabs come back by themselves.

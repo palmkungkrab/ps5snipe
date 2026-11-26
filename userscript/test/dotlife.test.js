@@ -67,6 +67,8 @@ test('Dotlife: anything but a normal reply is blocked with a why', () => {
     [200, JSON.stringify({ data: { products: null } }), 'dotlife feed fields changed'],
     [200, empty, 'dotlife feed listed no products'],
     [200, feedWith((it) => it.forEach((i) => { delete i.url_key; })), 'dotlife product fields changed'],
+    // The Sony console list always holds consoles; none recognised means renamed listings, not "all sold out".
+    [200, feedWith((it) => it.forEach((i) => { i.name = 'Sony PS5 Slim'; })), 'dotlife feed listed no consoles'],
   ];
   for (const [status, text, why] of cases) {
     assert.deepEqual(PS5W.parseDotlife(status, text, DL), { blocked: true, why }, why);

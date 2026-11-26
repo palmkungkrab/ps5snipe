@@ -63,7 +63,9 @@ test('store table', () => {
   assert.equal(PS5W.STORES.banana.hcSlug, 'banana-it');
   assert.equal(PS5W.storeForHost('www.dotlife.store').name, 'Dotlife');
   assert.equal(PS5W.STORES.dotlife.hcSlug, 'dotlife');
-  assert.equal(PS5W.watchUrl(PS5W.STORES.dotlife), 'https://www.dotlife.store/digital-lifestyle/gaming-toy/gaming-console.html?brand%5Bfilter%5D=SONY%2C481#ps5watch');
+  // With page=1 already there the PWA leaves the URL alone; without it, it adds page=1 and drops #ps5watch
+  // (seen live 2026-11-27), and the tab would never watch.
+  assert.equal(PS5W.watchUrl(PS5W.STORES.dotlife), 'https://www.dotlife.store/digital-lifestyle/gaming-toy/gaming-console.html?brand%5Bfilter%5D=SONY%2C481&page=1#ps5watch');
 });
 
 test('page fetch: a per-request init overrides the defaults (the Dotlife feed must not send cookies)', () => {

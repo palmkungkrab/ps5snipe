@@ -35,7 +35,8 @@ PS5W.STORES = {
     key: 'dotlife',
     name: 'Dotlife',
     host: 'www.dotlife.store',
-    searchPath: '/digital-lifestyle/gaming-toy/gaming-console.html?brand%5Bfilter%5D=SONY%2C481',
+    // page=1 included: without it the PWA rewrites the URL to add it and drops #ps5watch (seen live 2026-11-27).
+    searchPath: '/digital-lifestyle/gaming-toy/gaming-console.html?brand%5Bfilter%5D=SONY%2C481&page=1',
     hcSlug: 'dotlife',
     feed: {
       url: 'https://apim.istudio.store/graphql',
@@ -721,6 +722,8 @@ PS5W.parseDotlife = function parseDotlife(status, text, origin) {
       reason: known ? 'feed stock_status' : 'stock fields missing',
     });
   }
+  // This list always holds consoles: none recognised means renamed listings, not "all sold out".
+  if (!byUrl.size) return { blocked: true, why: 'dotlife feed listed no consoles' };
   return { blocked: false, products: [...byUrl.values()] };
 };
 
