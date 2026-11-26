@@ -5,18 +5,20 @@ Watches Thai online stores for **PS5 console** restocks and pings you on **Disco
 | Store | How it's checked | Status |
 |---|---|---|
 | [Sony Store TH](https://store.sony.co.th/collections/playstation) | Shopify JSON feed, every ~30s | ✅ works on GitHub Actions; ❌ HTTP 429 from our Thai home IP |
-| [JIB](https://www.jib.co.th/) | headless Chromium + schema.org stock data | ✅ works on GitHub Actions and from home |
-| [Powerbuy](https://www.powerbuy.co.th/th/category/game/game-console/playstation) | headless Chromium | ❌ Cloudflare blocks it even from a Thai home IP (off) |
-| [Banana IT](https://www.bnn.in.th/th/p/gaming-gear/console/playstation-0) | headless Chromium | ✅ from a Thai home IP only (blocks GitHub) |
+| [JIB](https://www.jib.co.th/) | GitHub Actions (headless Chromium + schema.org stock data) **and** the laptop browser | ✅ works on both (watched twice on purpose) |
+| [Powerbuy](https://www.powerbuy.co.th/th/category/game/game-console/playstation) | real Chrome tab on the laptop (userscript) | ✅ real Chrome gets through; headless Chromium is blocked |
+| [Banana IT](https://www.bnn.in.th/th/p/gaming-gear/console/playstation-0) | real Chrome tab on the laptop (userscript) | ✅ real Chrome gets through; blocks GitHub |
 | [dotlife](https://www.dotlife.store/) | headless Chromium | ❌ Cloudflare blocks it even from a Thai home IP (off) |
 | Lazada | headless Chromium | 🧪 disabled by default (captcha-heavy) |
 
 Powerbuy, Banana and dotlife are the official PS5 retailers listed on
-[playstation.com/th-th/ps5/buy-now](https://www.playstation.com/th-th/ps5/buy-now/). They block cloud/datacenter IPs.
-Tested 2026-11-25: Banana IT works from a Thai home connection, but Powerbuy and dotlife block automated checks
-even from home, so they are switched off. The current split is **GitHub Actions = Sony Store TH + JIB** and
-**home PC = Banana IT** (the other sites are `enabled: false` in `config.yaml`; GitHub picks its sites with `--site`,
-which ignores `enabled`). Don't watch a site from both places, or one restock pings you twice.
+[playstation.com/th-th/ps5/buy-now](https://www.playstation.com/th-th/ps5/buy-now/). They block cloud/datacenter IPs
+and automated browsers. dotlife stays off.
+
+**Who watches what:** GitHub Actions = Sony Store TH + JIB. The laptop browser = Powerbuy + Banana IT + JIB.
+JIB is watched twice on purpose, so a JIB restock can ping twice. Every ping is labelled 💻 laptop or ☁️ GitHub.
+The old Python laptop runner is retired. (`config.yaml` keeps the other sites `enabled: false`; GitHub picks its
+sites with `--site`, which ignores `enabled`.)
 
 Only **consoles** trigger alerts. Games, controllers, covers, stands, disc drives, VR2 and Portal are ignored
 (see `ps5snipe/matching.py`).
@@ -91,7 +93,7 @@ WantedBy=multi-user.target
 `.github/workflows/watch.yml` runs every 5 minutes on GitHub and keeps checking **Sony Store TH and JIB**
 for 6 minutes per run (Sony ~every 30s, JIB ~every 60s). Runs overlap on purpose: the next one is already
 checking before the previous one stops, so there is no blind gap between runs (a drop during the overlap may
-ping twice). Powerbuy/Banana/dotlife block GitHub's servers, so they are only covered by your PC.
+ping twice). Powerbuy/Banana/dotlife block GitHub's servers, so they are covered by the laptop browser watcher (Powerbuy, Banana IT; dotlife is off).
 
 JIB occasionally blocks a single run: each run gets a fresh GitHub server, and some of their IPs are on JIB's
 blocklist. The next run usually gets a clean IP, so the workflow passes `--warn-after 10`. Because runs
@@ -114,6 +116,13 @@ blocked Sony run is enough to warn. `--headful` doesn't help with this kind of b
 
 Public repos get unlimited Actions minutes. On a private repo this schedule would use up the free allowance in days.
 To pause it: disable the cron-job.org job (or Actions → PS5 stock watch → ⋯ → Disable workflow).
+
+## Laptop browser watcher
+
+Powerbuy and Banana IT block bots, but not a real Chrome tab. A small Tampermonkey script
+(`userscript/ps5watch.user.js`) watches Powerbuy, Banana IT and JIB from three Chrome tabs on the laptop.
+It pings Discord, and Healthchecks.io warns you if a tab stops checking in.
+Setup steps and what the messages mean: [`userscript/README.md`](userscript/README.md).
 
 ## Adding another store
 
