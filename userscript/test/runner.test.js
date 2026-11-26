@@ -105,9 +105,11 @@ test('block sequence: reload once, needs you once, stuck quiet, watching again',
   assert.equal(env.calls.post.length, 1);
   assert.match(env.calls.post[0].content, /Powerbuy needs you/);
   assert.match(env.calls.post[0].content, new RegExp(`^<@${USER}>`));
+  assert.match(env.calls.post[0].content, /asking whether you're human/);
   assert.equal(env.calls.ping.length, 0);
   assert.equal(r.delayMs, 300000);
   assert.equal(lastRender(env).mode, 'warn');
+  assert.equal(lastRender(env).why, 'HTTP 403');
   assert.deepEqual(env.state.flags, { reloaded: true, stuck: true });
 
   // 3. blocked again while stuck: no post, no ping, no reload
@@ -131,6 +133,29 @@ test('block sequence: reload once, needs you once, stuck quiet, watching again',
   assert.deepEqual(env.state.flags, { reloaded: false, stuck: false });
   assert.equal(lastRender(env).mode, 'ok');
   assert.ok(inNormalRange(r));
+});
+
+test('needs you for a changed page names the cause instead of a human check', async () => {
+  const env = fakeEnv();
+  env.page = () => ({ status: 200, text: pbWith((ps) => ps.forEach((p) => { delete p.stockAvail; })) });
+  assert.equal(await PS5W.runCheck(env, PB), null);
+  assert.equal(env.calls.reload, 1);
+  const r = await PS5W.runCheck(env, PB);
+  assert.equal(r.delayMs, 300000);
+  assert.equal(env.calls.post.length, 1);
+  assert.equal(env.calls.post[0].content, `<@${USER}> ⚠️ **Powerbuy needs you** 💻 laptop\n`
+    + 'Powerbuy is NOT being watched: Powerbuy product fields changed. If the Powerbuy tab on the laptop looks normal, '
+    + 'reload it once. If this keeps happening, the script needs an update.');
+  assert.equal(env.calls.ping.length, 0);
+  const v = lastRender(env);
+  assert.equal(v.mode, 'warn');
+  assert.equal(v.why, 'Powerbuy product fields changed');
+
+  // A network error while stuck keeps the warn box and its cause.
+  env.page = () => { throw new Error('offline'); };
+  await PS5W.runCheck(env, PB);
+  assert.equal(lastRender(env).mode, 'warn');
+  assert.equal(lastRender(env).why, 'Powerbuy product fields changed');
 });
 
 test('Discord post failing: check still resolves and pings; box shows Discord failed', async () => {

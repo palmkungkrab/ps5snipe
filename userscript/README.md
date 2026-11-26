@@ -80,10 +80,14 @@ JIB is watched by both on purpose, so a JIB restock pings you twice.
 ## What the messages mean
 
 **"Needs you"**
-The store asked "are you human?". The tab reloaded once and is still stuck.
-1. Open that tab.
-2. Pass the check.
-3. Watching restarts by itself. A "watching again" message follows.
+The tab reloaded once and is still stuck, so that store is not being watched. The message says why.
+- **"asking whether you're human"**:
+  1. Open that tab.
+  2. Pass the check.
+  3. Watching restarts by itself. A "watching again" message follows.
+- **"NOT being watched: …"** (for example `HTTP 404`, `not the normal search page` or
+  `Powerbuy product fields changed`): open that tab. If it looks normal, reload it once.
+  If the message keeps coming back, the store changed its page and the script needs an update.
 
 **A red Healthchecks check**
 That tab stopped checking in. Common causes:

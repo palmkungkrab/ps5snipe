@@ -54,11 +54,28 @@ test('unknown availability shows ❔', () => {
 });
 
 test('warn view: human check text, Healthchecks paused, dimmed list', () => {
-  const h = PS5W.renderBox({ ...base, mode: 'warn' });
-  assert.match(h, /asking if you're human/);
+  for (const why of ['HTTP 403', 'HTTP 429', 'challenge page: Just a moment...']) {
+    const h = PS5W.renderBox({ ...base, mode: 'warn', why });
+    assert.match(h, /asking if you're human/, why);
+    assert.match(h, /Healthchecks: paused/);
+    assert.doesNotMatch(h, /Healthchecks ✓/);
+    assert.match(h, /class="st warn"/);
+    assert.match(h, /<li class="dim">/);
+  }
+});
+
+test('warn view: any other cause names it and asks for one reload, not a human check', () => {
+  const h = PS5W.renderBox({ ...base, mode: 'warn', why: 'not the normal search page' });
+  assert.match(h, /Powerbuy is NOT being watched: not the normal search page\./);
+  assert.match(h, /If this tab looks normal, reload it once\. If this keeps happening, the script needs an update\./);
+  assert.doesNotMatch(h, /human/);
   assert.match(h, /Healthchecks: paused/);
-  assert.doesNotMatch(h, /Healthchecks ✓/);
-  assert.match(h, /class="st warn"/);
+});
+
+test('warn view: the cause is escaped', () => {
+  const h = PS5W.renderBox({ ...base, mode: 'warn', why: '<img src=x onerror=alert(1)>' });
+  assert.match(h, /NOT being watched: &lt;img src=x onerror=alert\(1\)&gt;/);
+  assert.doesNotMatch(h, /<img/);
 });
 
 test('error line is shown and escaped', () => {

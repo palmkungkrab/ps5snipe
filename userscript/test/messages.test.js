@@ -33,13 +33,26 @@ test('buildInStock falls back to - and cuts long titles', () => {
   assert.equal(m.embeds[0].fields[2].value, '-');
 });
 
-test('buildNeedsYou', () => {
-  const m = PS5W.buildNeedsYou('Powerbuy', '42');
-  assert.equal(m.content,
-    '<@42> ⚠️ **Powerbuy needs you** 💻 laptop\n'
-    + "Powerbuy is asking whether you're human. The tab reloaded once and is still stuck, so **Powerbuy is NOT being watched**. Solve the check on the Powerbuy tab on the laptop and watching restarts by itself.");
-  assert.match(m.content, /Powerbuy is NOT being watched/);
-  assert.deepEqual(m.allowed_mentions, { users: ['42'] });
+const HUMAN_CHECK = '<@42> ⚠️ **Powerbuy needs you** 💻 laptop\n'
+  + "Powerbuy is asking whether you're human. The tab reloaded once and is still stuck, so **Powerbuy is NOT being watched**. Solve the check on the Powerbuy tab on the laptop and watching restarts by itself.";
+
+test('buildNeedsYou: a challenge page, HTTP 403 or HTTP 429 is a human check', () => {
+  for (const why of ['challenge page: Just a moment...', 'HTTP 403', 'HTTP 429']) {
+    const m = PS5W.buildNeedsYou('Powerbuy', '42', why);
+    assert.equal(m.content, HUMAN_CHECK, why);
+    assert.deepEqual(m.allowed_mentions, { users: ['42'] });
+  }
+});
+
+test('buildNeedsYou: any other cause says what is wrong, not "human"', () => {
+  for (const why of ['HTTP 404', 'HTTP 500', 'HTTP 503', 'not the normal search page', 'Powerbuy product fields changed']) {
+    const m = PS5W.buildNeedsYou('Powerbuy', '42', why);
+    assert.equal(m.content, '<@42> ⚠️ **Powerbuy needs you** 💻 laptop\n'
+      + `Powerbuy is NOT being watched: ${why}. If the Powerbuy tab on the laptop looks normal, reload it once. `
+      + 'If this keeps happening, the script needs an update.', why);
+    assert.doesNotMatch(m.content, /human/);
+    assert.deepEqual(m.allowed_mentions, { users: ['42'] });
+  }
 });
 
 test('buildWatchingAgain', () => {

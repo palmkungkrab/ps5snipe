@@ -191,11 +191,22 @@ PS5W.buildInStock = function buildInStock(product, storeName, userId) {
   };
 };
 
-PS5W.buildNeedsYou = function buildNeedsYou(storeName, userId) {
+// A blocked check's why: only a challenge page or HTTP 403/429 means "prove you're human".
+PS5W.isHumanCheck = function isHumanCheck(why) {
+  const w = String(why == null ? '' : why);
+  return w.startsWith('challenge page') || w === 'HTTP 403' || w === 'HTTP 429';
+};
+
+const UNKNOWN_WHY = 'still stuck after a reload';
+
+PS5W.buildNeedsYou = function buildNeedsYou(storeName, userId, why) {
+  const line2 = PS5W.isHumanCheck(why)
+    ? `${storeName} is asking whether you're human. The tab reloaded once and is still stuck, so **${storeName} is NOT being watched**. `
+      + `Solve the check on the ${storeName} tab on the laptop and watching restarts by itself.`
+    : `${storeName} is NOT being watched: ${why || UNKNOWN_WHY}. If the ${storeName} tab on the laptop looks normal, reload it once. `
+      + 'If this keeps happening, the script needs an update.';
   return {
-    content: `<@${userId}> ⚠️ **${storeName} needs you** ${PS5W.LABEL}\n`
-      + `${storeName} is asking whether you're human. The tab reloaded once and is still stuck, so **${storeName} is NOT being watched**. `
-      + `Solve the check on the ${storeName} tab on the laptop and watching restarts by itself.`,
+    content: `<@${userId}> ⚠️ **${storeName} needs you** ${PS5W.LABEL}\n${line2}`,
     allowed_mentions: { users: [userId] },
   };
 };
@@ -316,7 +327,10 @@ PS5W.renderBox = function renderBox(view) {
     const hit = (view.products || []).find((p) => p.available === true);
     st = `<div class="st stock">🔥 ${hit ? esc(hit.title) : 'A PS5'} is IN STOCK${time ? ` · checked ${time}` : ''}`;
   } else if (mode === 'warn') {
-    st = `<div class="st warn">⚠️ ${store} is asking if you're human. Reloaded once, still stuck.<br>Solve the check on this tab and watching restarts by itself.`;
+    st = PS5W.isHumanCheck(view.why)
+      ? `<div class="st warn">⚠️ ${store} is asking if you're human. Reloaded once, still stuck.<br>Solve the check on this tab and watching restarts by itself.`
+      : `<div class="st warn">⚠️ ${store} is NOT being watched: ${esc(view.why || UNKNOWN_WHY)}.<br>`
+        + 'If this tab looks normal, reload it once. If this keeps happening, the script needs an update.';
   } else {
     st = `<div class="st">🟢 ${time ? `Checked ${time} · next check in about 60 s` : 'Watching'}`;
   }
@@ -730,6 +744,7 @@ PS5W.runCheck = async function runCheck(env, store) {
       products: prev ? prev.products : [],
       discordOk: mem.discordOk,
       hcOk: false,
+      why: prev ? prev.why : undefined,
       error: `network error: ${e && e.message ? e.message : e}`,
     });
     return { delayMs: PS5W.nextDelayMs('normal', env.random()) };
@@ -744,7 +759,7 @@ PS5W.runCheck = async function runCheck(env, store) {
   const post = (payload) => settled(() => env.postDiscord(payload));
 
   if (result.blocked) {
-    if (step.action === 'needsYou') mem.discordOk = await post(PS5W.buildNeedsYou(store.name, settings.userId));
+    if (step.action === 'needsYou') mem.discordOk = await post(PS5W.buildNeedsYou(store.name, settings.userId, result.why));
     show(env, mem, {
       mode: 'warn',
       storeName: store.name,
@@ -752,6 +767,7 @@ PS5W.runCheck = async function runCheck(env, store) {
       products: prev ? prev.products : [],
       discordOk: mem.discordOk,
       hcOk: false,
+      why: result.why,
       error: `blocked: ${result.why}`,
     });
     return { delayMs: PS5W.STUCK_RETRY_MS };
