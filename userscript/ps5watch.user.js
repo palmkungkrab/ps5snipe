@@ -776,8 +776,10 @@ function bootstrap() {
   }, `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`);
   const lockNow = () => PS5W.lockDecision(readJson(() => localStorage, LOCK_KEY, null), tabId, Date.now());
 
+  // Closed root, kept only in this closure: store page scripts can't reach the settings form (it holds the webhook).
+  // The host gets no id or attributes.
   const host = document.createElement('div');
-  const root = host.attachShadow({ mode: 'open' });
+  const root = host.attachShadow({ mode: 'closed' });
   document.documentElement.appendChild(host);
   const paint = (html) => { root.innerHTML = `<style>${PS5W.BOX_CSS}</style>${html}`; };
   const pill = (text) => paint(PS5W.renderBox({ mode: 'pill', storeName: store.name, pillText: text }));

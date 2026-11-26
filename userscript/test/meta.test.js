@@ -40,6 +40,12 @@ test('no secrets in the file', () => {
   assert.doesNotMatch(text, /hc-ping\.com\/[A-Za-z0-9_-]{8,}/);
 });
 
+test('status box shadow root is closed and never read back (settings form holds the webhook)', () => {
+  const attaches = text.match(/attachShadow\([^)]*\)/g) || [];
+  assert.deepEqual(attaches, ["attachShadow({ mode: 'closed' })"]);
+  assert.doesNotMatch(text, /\.shadowRoot\b/);
+});
+
 test('store table', () => {
   const PS5W = require('../ps5watch.user.js');
   assert.equal(PS5W.storeForHost('www.powerbuy.co.th').name, 'Powerbuy');
