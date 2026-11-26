@@ -515,6 +515,14 @@ PS5W.OOS_RE = /สินค้าหมด|หมดชั่วคราว|ห
 
 const NOT_NORMAL = 'not the normal search page';
 
+// Powerbuy field names come from a third-party script and our fixture is synthetic, so check them before trusting them.
+const nonEmptyString = (v) => typeof v === 'string' && v.trim() !== '';
+const finiteStock = (v) => (typeof v === 'number' && Number.isFinite(v))
+  || (nonEmptyString(v) && Number.isFinite(Number(v)));
+const hasDeliveryKey = (p) => 'canDelivery' in p || 'canPickup' in p;
+const pbShapeOk = (p) => !!p && typeof p === 'object'
+  && nonEmptyString(p.name) && nonEmptyString(p.slugname) && finiteStock(p.stockAvail) && hasDeliveryKey(p);
+
 // Powerbuy search page: __NEXT_DATA__ -> props.pageProps.productListData.products.
 PS5W.parsePowerbuy = function parsePowerbuy(status, html, origin) {
   const problem = PS5W.pageProblem(status, html);
@@ -525,17 +533,21 @@ PS5W.parsePowerbuy = function parsePowerbuy(status, html, origin) {
     try { list = JSON.parse(m[1]).props.pageProps.productListData.products; } catch (e) { list = null; }
   }
   if (!Array.isArray(list)) return { blocked: true, why: NOT_NORMAL };
+  // Not one entry has the fields we read: a renamed field would otherwise look like "every console sold out".
+  if (list.length && !list.some(pbShapeOk)) return { blocked: true, why: 'Powerbuy product fields changed' };
   const byUrl = new Map();
   for (const p of list) {
-    if (!p || typeof p.name !== 'string' || !PS5W.isConsole(p.name)) continue;
-    const url = PS5W.normalizeUrl(`${origin}/th/product/${p.slugname}`, origin);
+    if (!p || typeof p !== 'object' || !nonEmptyString(p.name) || !PS5W.isConsole(p.name)) continue;
+    if (!nonEmptyString(p.slugname)) continue; // no slug, no URL key of its own
+    const url = PS5W.normalizeUrl(`${origin}/th/product/${p.slugname.trim()}`, origin);
     if (!url || byUrl.has(url)) continue;
+    const known = finiteStock(p.stockAvail) && hasDeliveryKey(p);
     byUrl.set(url, {
       title: p.name,
       url,
       price: PS5W.formatPrice(p.priceSort),
-      available: Number(p.stockAvail) > 0 && !!(p.canDelivery || p.canPickup),
-      reason: 'search page stock flag',
+      available: known ? Number(p.stockAvail) > 0 && !!(p.canDelivery || p.canPickup) : null,
+      reason: known ? 'search page stock flag' : 'stock fields missing',
     });
   }
   return { blocked: false, products: [...byUrl.values()] };
@@ -545,30 +557,59 @@ function cardText(inner) {
   return decodeEntities(inner.replace(/<[^>]*>/g, ' ')).replace(/\s+/g, ' ').trim();
 }
 
-// Name = title attribute of the first <div> that has one (not the img); fallback: text before the first baht sign.
-function bananaTitle(inner, text) {
-  const divRe = /<div\b(?:"[^"]*"|'[^']*'|[^>"'])*>/gi;
-  let t;
-  while ((t = divRe.exec(inner))) {
-    const title = tagAttrs(t[0]).title;
-    if (title && title.trim()) return title.replace(/\s+/g, ' ').trim();
+// Inner HTML of the <div> whose open tag ends at `from`, up to its matching </div>.
+function divBody(html, from) {
+  const re = /<div\b(?:"[^"]*"|'[^']*'|[^>"'])*>|<\/div\s*>/gi;
+  re.lastIndex = from;
+  let depth = 1;
+  let m;
+  while ((m = re.exec(html))) {
+    depth += m[0][1] === '/' ? -1 : 1;
+    if (depth === 0) return html.slice(from, m.index);
   }
-  return text.split('฿')[0].trim();
+  return html.slice(from);
 }
 
-// First baht amount outside <del>/<s>/<strike> (old crossed-out price).
+// Name: the product-name div (its title, else its text); else the first titled <div> with no <img> inside
+// (a badge or label); else the text before the first baht sign.
+function bananaTitle(inner, text) {
+  const squash = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+  const divRe = /<div\b(?:"[^"]*"|'[^']*'|[^>"'])*>/gi;
+  let fallback = '';
+  let t;
+  while ((t = divRe.exec(inner))) {
+    const attrs = tagAttrs(t[0]);
+    const title = squash(attrs.title);
+    if (/(^|\s)product-name(\s|$)/.test(attrs.class || '')) {
+      const name = title || cardText(divBody(inner, divRe.lastIndex));
+      if (name) return name;
+    }
+    if (title && !fallback && !/<img\b/i.test(divBody(inner, divRe.lastIndex))) fallback = title;
+  }
+  return fallback || text.split('฿')[0].trim();
+}
+
+// "Save ฿300" badges are not prices.
+const SAVING_RE = /(?:ประหยัด(?:ไป)?|you\s*save|save)\s*฿\s*[\d,]+(?:\.\d+)?/gi;
+
+// First baht amount outside <del>/<s>/<strike> (old crossed-out price) and savings badges.
 function bananaPrice(inner) {
   const live = inner.replace(/<(del|s|strike)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, ' ');
-  const m = /฿\s*([\d,]+(?:\.\d+)?)/.exec(cardText(live));
+  const m = /฿\s*([\d,]+(?:\.\d+)?)/.exec(cardText(live).replace(SAVING_RE, ' '));
   return m ? PS5W.formatPrice(m[1]) : null;
 }
 
+// A search-result card that reads as a product (any product): a name and a baht price inside the link.
+const bananaCardParses = (a) => a.href.includes('ref=search-result')
+  && !!bananaTitle(a.inner, cardText(a.inner)) && !!bananaPrice(a.inner);
+
 // Banana IT search page: cards are <a href="/th/p/...?ref=search-result">. It lists only items ready to sell.
+// Normal only if at least one card parses, so a markup change can't pass as "no consoles in stock".
 PS5W.parseBanana = function parseBanana(status, html, origin) {
   const problem = PS5W.pageProblem(status, html);
   if (problem) return { blocked: true, why: problem };
   const all = anchorList(html);
-  if (!all.some((a) => a.href.includes('ref=search-result'))) return { blocked: true, why: NOT_NORMAL };
+  if (!all.some(bananaCardParses)) return { blocked: true, why: NOT_NORMAL };
   const byUrl = new Map();
   for (const a of all) {
     if (!a.href.includes('/th/p/')) continue;
