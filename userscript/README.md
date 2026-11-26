@@ -1,6 +1,6 @@
 # Laptop browser watcher
 
-A small Tampermonkey script. It watches **Powerbuy, Banana IT and JIB** from real Chrome tabs on the laptop.
+A small Tampermonkey script. It watches **Powerbuy, Banana IT, JIB and Dotlife** from real Chrome tabs on the laptop.
 Real Chrome gets past the checks that block the Python watcher. When a PS5 console comes into stock,
 it pings your Discord with an `@mention`.
 
@@ -12,11 +12,11 @@ They are saved in the browser only.
 Healthchecks tells you when a tab stops checking in.
 
 1. Make a free account at [healthchecks.io](https://healthchecks.io).
-2. Make three checks. Use exactly these names: `powerbuy`, `banana-it`, `jib`.
+2. Make four checks. Use exactly these names: `powerbuy`, `banana-it`, `jib`, `dotlife`.
 3. For each check, set **Period** to 5 minutes and **Grace** to 5 minutes.
-4. **Set each check's Slug** to the same word (`powerbuy`, `banana-it`, `jib`). Renaming a check does
+4. **Set each check's Slug** to the same word (`powerbuy`, `banana-it`, `jib`, `dotlife`). Renaming a check does
    not set its slug. Check it: on the Checks page click **slug** in the "Ping URL" header. Each row
-   must end in `/powerbuy`, `/banana-it` or `/jib`, not "slug not set". If a slug is missing, the box
+   must end in `/powerbuy`, `/banana-it`, `/jib` or `/dotlife`, not "slug not set". If a slug is missing, the box
    shows **Healthchecks ✗**.
 5. Open **Settings → Ping key** and copy the project's **ping key** (about 22 characters). Do not
    copy a full check URL or a check's 36-character ID.
@@ -32,7 +32,7 @@ Healthchecks tells you when a tab stops checking in.
 3. Open this link: <https://raw.githubusercontent.com/palmkungkrab/ps5snipe/main/userscript/ps5watch.user.js>
    Tampermonkey offers to install the script. Click **Install**.
 
-## 3. Open the three watcher bookmarks
+## 3. Open the four watcher bookmarks
 
 Make one Chrome bookmark for each link below. Keep the `#ps5watch` at the end.
 That ending is what tells the script "this tab is a watcher".
@@ -42,8 +42,9 @@ That ending is what tells the script "this tab is a watcher".
 | Powerbuy | `https://www.powerbuy.co.th/th/search/ps5#ps5watch` |
 | Banana IT | `https://www.bnn.in.th/th/p?q=playstation%205#ps5watch` |
 | JIB | `https://www.jib.co.th/web/product/product_search/0?str_search=playstation%205#ps5watch` |
+| Dotlife | `https://www.dotlife.store/digital-lifestyle/gaming-toy/gaming-console.html?brand%5Bfilter%5D=SONY%2C481#ps5watch` |
 
-Open each bookmark in its own tab. Leave the three tabs open.
+Open each bookmark in its own tab. Leave the four tabs open.
 
 ## 4. Paste the settings (once)
 
@@ -54,7 +55,7 @@ A box shows in the corner of the tab. Fill in:
 3. **Healthchecks ping key.** From step 1.
 
 Click **Save**, then click **Test ping**. A message that says **💻 laptop** should arrive in Discord.
-All three store tabs share these settings, so you paste them only once.
+All four store tabs share these settings, so you paste them only once.
 
 If you think your Discord webhook link leaked, delete that webhook in Discord, make a new one, and paste the
 new link here (and into `.env`).
@@ -114,4 +115,4 @@ Tampermonkey gets new versions from the `main` branch by itself. It only updates
 `@version` number at the top of `ps5watch.user.js` goes up.
 
 To update right away: open the Tampermonkey dashboard, open the script and check for updates
-(or use the dashboard's update-check button), then reload the three watcher tabs.
+(or use the dashboard's update-check button), then reload the four watcher tabs.

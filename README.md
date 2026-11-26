@@ -8,14 +8,14 @@ Watches Thai online stores for **PS5 console** restocks and pings you on **Disco
 | [JIB](https://www.jib.co.th/) | GitHub Actions (headless Chromium + schema.org stock data) **and** the laptop browser | ✅ works on both (watched twice on purpose) |
 | [Powerbuy](https://www.powerbuy.co.th/th/category/game/game-console/playstation) | real Chrome tab on the laptop (userscript) | ✅ real Chrome gets through; headless Chromium is blocked |
 | [Banana IT](https://www.bnn.in.th/th/p/gaming-gear/console/playstation-0) | real Chrome tab on the laptop (userscript) | ✅ real Chrome gets through; blocks GitHub |
-| [dotlife](https://www.dotlife.store/) | headless Chromium | ❌ Cloudflare blocks it even from a Thai home IP (off) |
+| [dotlife](https://www.dotlife.store/) | real Chrome tab on the laptop (userscript, iStudio's product feed) | ✅ real Chrome gets through; headless Chromium is blocked |
 | Lazada | headless Chromium | 🧪 disabled by default (captcha-heavy) |
 
 Powerbuy, Banana and dotlife are the official PS5 retailers listed on
 [playstation.com/th-th/ps5/buy-now](https://www.playstation.com/th-th/ps5/buy-now/). They block cloud/datacenter IPs
-and automated browsers. dotlife stays off.
+and automated browsers. The laptop watches dotlife.
 
-**Who watches what:** GitHub Actions = Sony Store TH + JIB. The laptop browser = Powerbuy + Banana IT + JIB.
+**Who watches what:** GitHub Actions = Sony Store TH + JIB. The laptop browser = Powerbuy + Banana IT + JIB + Dotlife.
 JIB is watched twice on purpose, so a JIB restock can ping twice. Every ping is labelled 💻 laptop or ☁️ GitHub.
 The old Python laptop runner is retired. (`config.yaml` keeps every site `enabled: false`; GitHub picks its
 sites with `--site`, which ignores `enabled`.)
@@ -97,7 +97,7 @@ WantedBy=multi-user.target
 `.github/workflows/watch.yml` runs every 5 minutes on GitHub and keeps checking **Sony Store TH and JIB**
 for 6 minutes per run (Sony ~every 30s, JIB ~every 60s). Runs overlap on purpose: the next one is already
 checking before the previous one stops, so there is no blind gap between runs (a drop during the overlap may
-ping twice). Powerbuy/Banana/dotlife block GitHub's servers, so they are covered by the laptop browser watcher (Powerbuy, Banana IT; dotlife is off).
+ping twice). Powerbuy/Banana/dotlife block GitHub's servers, so they are covered by the laptop browser watcher (Powerbuy, Banana IT, Dotlife).
 
 JIB occasionally blocks a single run: each run gets a fresh GitHub server, and some of their IPs are on JIB's
 blocklist. The next run usually gets a clean IP, so the workflow passes `--warn-after 10`. Because runs
@@ -123,8 +123,8 @@ To pause it: disable the cron-job.org job (or Actions → PS5 stock watch → �
 
 ## Laptop browser watcher
 
-Powerbuy and Banana IT block bots, but not a real Chrome tab. A small Tampermonkey script
-(`userscript/ps5watch.user.js`) watches Powerbuy, Banana IT and JIB from three Chrome tabs on the laptop.
+Powerbuy, Banana IT and Dotlife block bots, but not a real Chrome tab. A small Tampermonkey script
+(`userscript/ps5watch.user.js`) watches Powerbuy, Banana IT, JIB and Dotlife from four Chrome tabs on the laptop.
 It pings Discord, and Healthchecks.io warns you if a tab stops checking in.
 Setup steps and what the messages mean: [`userscript/README.md`](userscript/README.md).
 

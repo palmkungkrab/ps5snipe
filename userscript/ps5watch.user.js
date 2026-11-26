@@ -1,11 +1,12 @@
 // ==UserScript==
 // @name         PS5 watch (laptop)
 // @namespace    https://github.com/palmkungkrab/ps5snipe
-// @version      1.0.1
-// @description  Watches Powerbuy, Banana IT and JIB for PS5 consoles from real Chrome tabs
+// @version      1.1.0
+// @description  Watches Powerbuy, Banana IT, JIB and Dotlife for PS5 consoles from real Chrome tabs
 // @match        https://www.powerbuy.co.th/*
 // @match        https://www.bnn.in.th/*
 // @match        https://www.jib.co.th/*
+// @match        https://www.dotlife.store/*
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_xmlhttpRequest
@@ -724,7 +725,7 @@ PS5W.parseDotlife = function parseDotlife(status, text, origin) {
 };
 
 // ---------------------------------------------------------------- runner
-// env: { fetchText(url)->Promise<{status,text}>, sleep(ms), now(), random(), getItems(slug), setItems(slug, items),
+// env: { fetchText(url, init?)->Promise<{status,text}>, sleep(ms), now(), random(), getItems(slug), setItems(slug, items),
 //        getFlags(), setFlags(flags), settings(), postDiscord(payload)->Promise<boolean>,
 //        pingHealthchecks(slug)->Promise<boolean>, reload(), render(view) }
 
@@ -764,9 +765,9 @@ PS5W.discordReply = function discordReply(status, text) {
 const SEARCH_PARSERS = { powerbuy: 'parsePowerbuy', banana: 'parseBanana' };
 
 // env.fetchText, with its rejection marked as a network error (anything else that throws is not one).
-async function fetchPage(env, url) {
+async function fetchPage(env, url, init) {
   try {
-    return await env.fetchText(url);
+    return await env.fetchText(url, init);
   } catch (e) {
     const err = new Error(e && e.message ? e.message : String(e));
     err.network = true;
@@ -777,6 +778,11 @@ async function fetchPage(env, url) {
 // Fetch and parse one store. A rejected fetch rejects with err.network set.
 PS5W.checkStore = async function checkStore(env, store) {
   const origin = `https://${store.host}`;
+  if (store.feed) {
+    const req = PS5W.feedRequest(store);
+    const reply = await fetchPage(env, req.url, req.init);
+    return PS5W.parseDotlife(reply.status, reply.text, origin);
+  }
   const searchUrl = origin + store.searchPath;
   const page = await fetchPage(env, searchUrl);
   if (SEARCH_PARSERS[store.key]) return PS5W[SEARCH_PARSERS[store.key]](page.status, page.text, origin);
@@ -992,9 +998,10 @@ function bootstrap() {
   }
 
   const env = {
-    fetchText: async (url) => {
+    fetchText: async (url, init) => {
       // A stalled request becomes a network error after 30 s instead of hanging the loop.
-      const r = await fetch(url, { cache: 'no-store', credentials: 'include', signal: AbortSignal.timeout(30000) });
+      // init goes last and overrides the defaults: the Dotlife feed must send no cookies (it refuses them).
+      const r = await fetch(url, { cache: 'no-store', credentials: 'include', signal: AbortSignal.timeout(30000), ...init });
       return { status: r.status, text: await r.text() };
     },
     sleep: (ms) => new Promise((resolve) => { setTimeout(resolve, ms); }),

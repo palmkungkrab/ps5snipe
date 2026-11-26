@@ -11,6 +11,8 @@ const GOOD_SETTINGS = { webhook: 'https://discord.com/api/webhooks/1/x-y', userI
 const PB = PS5W.STORES.powerbuy;
 const BN = PS5W.STORES.banana;
 const JIB = PS5W.STORES.jib;
+const DOT = PS5W.STORES.dotlife;
+const dlFeed = fx('dotlife-feed.json');
 
 const pbHtml = fx('powerbuy-search.synthetic.html');
 function pbWith(edit) {
@@ -25,13 +27,13 @@ const CHALLENGE = '<html><head><title>Just a moment...</title></head></html>';
 
 // Fake env: records every call. env.page(url) decides what fetchText returns (or throws).
 function fakeEnv(over = {}) {
-  const calls = { fetch: [], sleep: [], post: [], ping: [], setItems: [], setFlags: [], reload: 0, render: [] };
+  const calls = { fetch: [], fetchInit: [], sleep: [], post: [], ping: [], setItems: [], setFlags: [], reload: 0, render: [] };
   const state = { items: {}, flags: {}, settings: GOOD_SETTINGS, postOk: true, now: 1700000000000, ...over };
   const env = {
     calls,
     state,
     page: () => ({ status: 200, text: pbHtml }),
-    fetchText: async (url) => { calls.fetch.push(url); return env.page(url); },
+    fetchText: async (url, init) => { calls.fetch.push(url); calls.fetchInit.push(init); return env.page(url); },
     sleep: async (ms) => { calls.sleep.push(ms); },
     now: () => state.now,
     random: () => 0.5,
@@ -55,6 +57,7 @@ test('Powerbuy, one console in stock: one in-stock post, one ping, items saved, 
   env.page = () => ({ status: 200, text: pbInStock });
   const r = await PS5W.runCheck(env, PB);
   assert.deepEqual(env.calls.fetch, ['https://www.powerbuy.co.th/th/search/ps5']);
+  assert.deepEqual(env.calls.fetchInit, [undefined]); // other stores keep the default fetch (cookies included)
   assert.equal(env.calls.post.length, 1);
   const p = env.calls.post[0];
   assert.equal(p.content, `<@${USER}> 🟢 **PS5 IN STOCK at Powerbuy!** 💻 laptop ${PB_HIT}`);
@@ -431,4 +434,35 @@ test('pillText by mode', () => {
   assert.equal(PS5W.pillText({ mode: 'stock', storeName: 'JIB' }), '🔥 IN STOCK · JIB');
   assert.equal(PS5W.pillText({ mode: 'warn', storeName: 'JIB' }), '⚠️ Needs you · JIB');
   assert.equal(PS5W.pillText({ mode: 'setup', storeName: 'JIB' }), '⚙️ Set up');
+});
+
+test('Dotlife: one feed request with the store code and no cookies, then the parser', async () => {
+  const env = fakeEnv();
+  env.page = () => ({ status: 200, text: dlFeed });
+  const res = await PS5W.checkStore(env, DOT);
+  assert.deepEqual(env.calls.fetch, [PS5W.feedRequest(DOT).url]);
+  assert.deepEqual(env.calls.fetchInit, [{ credentials: 'omit', headers: { Store: 'dth' } }]);
+  assert.equal(res.blocked, false);
+  assert.equal(res.products.length, 3);
+});
+
+test('Dotlife: an empty feed list is "needs you", never "all sold out"', async () => {
+  const env = fakeEnv();
+  env.state.flags = { reloaded: true, stuck: false };
+  env.page = () => ({ status: 200, text: JSON.stringify({ data: { products: { total_count: 0, items: [] } } }) });
+  await PS5W.runCheck(env, DOT);
+  assert.equal(lastRender(env).mode, 'warn');
+  assert.equal(lastRender(env).why, 'dotlife feed listed no products');
+  assert.equal(env.calls.post.length, 1);
+  assert.equal(env.calls.setItems.length, 0);
+});
+
+test('Dotlife: IN_STOCK pings once with the product link', async () => {
+  const env = fakeEnv();
+  env.page = () => ({ status: 200, text: dlFeed.replace('"OUT_OF_STOCK"', '"IN_STOCK"') });
+  await PS5W.runCheck(env, DOT);
+  assert.equal(lastRender(env).mode, 'stock');
+  assert.equal(env.calls.post.length, 1);
+  assert.match(JSON.stringify(env.calls.post[0]), /sony-ps5-console-e-chassis\.html/);
+  assert.deepEqual(env.calls.ping, ['dotlife']);
 });

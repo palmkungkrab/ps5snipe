@@ -23,6 +23,7 @@ test('metadata block has the required lines', () => {
   has('@match https://www.powerbuy.co.th/*');
   has('@match https://www.bnn.in.th/*');
   has('@match https://www.jib.co.th/*');
+  has('@match https://www.dotlife.store/*');
   has('@grant GM_getValue');
   has('@grant GM_setValue');
   has('@grant GM_xmlhttpRequest');
@@ -63,4 +64,8 @@ test('store table', () => {
   assert.equal(PS5W.storeForHost('www.dotlife.store').name, 'Dotlife');
   assert.equal(PS5W.STORES.dotlife.hcSlug, 'dotlife');
   assert.equal(PS5W.watchUrl(PS5W.STORES.dotlife), 'https://www.dotlife.store/digital-lifestyle/gaming-toy/gaming-console.html?brand%5Bfilter%5D=SONY%2C481#ps5watch');
+});
+
+test('page fetch: a per-request init overrides the defaults (the Dotlife feed must not send cookies)', () => {
+  assert.match(text, /fetch\(url, \{ cache: 'no-store', credentials: 'include', signal: AbortSignal\.timeout\(30000\), \.\.\.init \}\)/);
 });
