@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PS5 watch (laptop)
 // @namespace    https://github.com/palmkungkrab/ps5snipe
-// @version      1.0.0
+// @version      1.0.1
 // @description  Watches Powerbuy, Banana IT and JIB for PS5 consoles from real Chrome tabs
 // @match        https://www.powerbuy.co.th/*
 // @match        https://www.bnn.in.th/*
@@ -66,12 +66,19 @@ PS5W.DEFAULT_EXCLUDE = [
   /remote/i, /รีโมท/i, /cooling/i, /พัดลม/i, /\bbag\b/i, /กระเป๋า/i,
 ];
 
+// A title that names a controller is a controller, unless it also carries a sign only a console
+// listing has (Powerbuy sells "DualSense ... ASIA-00500" and "... สำหรับคอนโซล PS5" controllers).
+// Same rule as ps5snipe/matching.py.
+PS5W.CONTROLLER_RE = /controller|คอนโทรลเลอร์|dualsense|จอย/i;
+PS5W.CONSOLE_SIGN_RE = /\bbundle\b|\bcfi-[127]\d{3}|\b\d+\s*(tb|gb)\b|\bdigital\b|\bdisc\b|\b2nd\b|จอย\s*2\s*ตัว|\bchassis\b|game\s*console/i;
+
 PS5W.isConsole = function isConsole(title) {
   const t = String(title || '').split(/\s+/).filter(Boolean).join(' ');
   if (!t) return false;
   if (!PS5W.DEFAULT_INCLUDE.some((r) => r.test(t))) return false;
   if (!PS5W.DEFAULT_REQUIRE.some((r) => r.test(t))) return false;
-  return !PS5W.DEFAULT_EXCLUDE.some((r) => r.test(t));
+  if (PS5W.DEFAULT_EXCLUDE.some((r) => r.test(t))) return false;
+  return !(PS5W.CONTROLLER_RE.test(t) && !PS5W.CONSOLE_SIGN_RE.test(t));
 };
 
 // ---------------------------------------------------------------- alerts

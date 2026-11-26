@@ -19,8 +19,14 @@ def test_matcher_consoles():
         "SONY เครื่องเล่นเกมคอนโซล PlayStation 5 Slim Digital Edition (1TB)",
         "GAME CONSOLE (เครื่องเล่นเกมคอนโซล) SONY PLAYSTATION 5 PRO - 2TB NEW MODEL",
         "PS5 Pro 2TB",
+        # a console bundle that also ships a controller is still a console
+        "PlayStation 5 Slim Console + 2nd DualSense Wireless Controller Bundle",
     ]
     no = [
+        # real Powerbuy controller titles that pinged as consoles on 2026-11-26 (bundle SKU / "for PS5 console")
+        "PS5 DualSense PC Ready คอนโทรลเลอร์ไร้สาย + USB Cable (สี Midnight Black) รุ่น ASIA-00500",
+        "คอนโทรลเลอร์ไร้สาย (สี Cosmic Red ) รุ่น DualSense สำหรับคอนโซล PS5",
+        "DualSense Wireless Controller for PS5 Console (White)",
         "PlayStation 5 Disc Drive (SLIM) (CFI-ZDD1G)",
         "PlayStation 5  Vertical Stand (SLIM) (CFI-ZVS1P)",
         "DualSense® Wireless Controller: CFI-ZCT1G (Metallic color)",

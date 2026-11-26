@@ -34,6 +34,16 @@ DEFAULT_EXCLUDE = [
 ]
 
 
+# A title that names a controller is a controller, unless it also carries a sign only a console
+# listing has (Powerbuy sells "DualSense ... ASIA-00500" and "... สำหรับคอนโซล PS5" controllers).
+# Same rule as userscript/ps5watch.user.js.
+CONTROLLER_RE = re.compile(r"controller|คอนโทรลเลอร์|dualsense|จอย", re.IGNORECASE)
+CONSOLE_SIGN_RE = re.compile(
+    r"\bbundle\b|\bcfi-[127]\d{3}|\b\d+\s*(tb|gb)\b|\bdigital\b|\bdisc\b|\b2nd\b|จอย\s*2\s*ตัว|\bchassis\b|game\s*console",
+    re.IGNORECASE,
+)
+
+
 @dataclass
 class Matcher:
     include: List[str] = field(default_factory=lambda: list(DEFAULT_INCLUDE))
@@ -66,4 +76,6 @@ class Matcher:
             return False
         if self._req and not any(r.search(t) for r in self._req):
             return False
-        return not any(r.search(t) for r in self._exc)
+        if any(r.search(t) for r in self._exc):
+            return False
+        return not (CONTROLLER_RE.search(t) and not CONSOLE_SIGN_RE.search(t))
