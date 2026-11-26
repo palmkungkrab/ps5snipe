@@ -341,7 +341,7 @@ function tagAttrs(tag) {
 }
 
 // Every <a href> in raw HTML. label = inner text + title attr + inner alt attrs.
-PS5W.anchors = function anchors(html) {
+function anchorList(html) {
   const out = [];
   const re = /<a\b((?:"[^"]*"|'[^']*'|[^>"'])*)>([\s\S]*?)<\/a\s*>/gi;
   let m;
@@ -357,9 +357,13 @@ PS5W.anchors = function anchors(html) {
     }
     const text = decodeEntities(m[2].replace(/<[^>]*>/g, ' '));
     const label = [text, attrs.title, ...alts].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
-    out.push({ href: attrs.href, label });
+    out.push({ href: attrs.href, label, inner: m[2] });
   }
   return out;
+}
+
+PS5W.anchors = function anchors(html) {
+  return anchorList(html).map((a) => ({ href: a.href, label: a.label }));
 };
 
 // Absolute http(s) URL without query/hash, or null for anything else.
@@ -492,6 +496,85 @@ PS5W.parseJibProduct = function parseJibProduct(status, html, url, fallbackTitle
     product.reason = product.available === null ? 'no stock signal found' : 'schema.org microdata';
   }
   return { blocked: false, product };
+};
+
+// ---------------------------------------------------------------- stores: Powerbuy and Banana IT parsers
+// Port of OOS_RE (browser.py:31).
+PS5W.OOS_RE = /สินค้าหมด|หมดชั่วคราว|หมดสต็อก|หมดสต๊อก|ไม่มีสินค้า|สินค้าไม่พร้อมจำหน่าย|แจ้งเตือนเมื่อ(?:สินค้า|มีสินค้า)|out\s*of\s*stock|sold\s*out|currently\s*unavailable|not\s*available|notify\s*me|temporarily\s*unavailable/i;
+
+const NOT_NORMAL = 'not the normal search page';
+
+// Powerbuy search page: __NEXT_DATA__ -> props.pageProps.productListData.products.
+PS5W.parsePowerbuy = function parsePowerbuy(status, html, origin) {
+  const problem = PS5W.pageProblem(status, html);
+  if (problem) return { blocked: true, why: problem };
+  const m = /<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/.exec(String(html || ''));
+  let list = null;
+  if (m) {
+    try { list = JSON.parse(m[1]).props.pageProps.productListData.products; } catch (e) { list = null; }
+  }
+  if (!Array.isArray(list)) return { blocked: true, why: NOT_NORMAL };
+  const byUrl = new Map();
+  for (const p of list) {
+    if (!p || typeof p.name !== 'string' || !PS5W.isConsole(p.name)) continue;
+    const url = PS5W.normalizeUrl(`${origin}/th/product/${p.slugname}`, origin);
+    if (!url || byUrl.has(url)) continue;
+    byUrl.set(url, {
+      title: p.name,
+      url,
+      price: PS5W.formatPrice(p.priceSort),
+      available: Number(p.stockAvail) > 0 && !!(p.canDelivery || p.canPickup),
+      reason: 'search page stock flag',
+    });
+  }
+  return { blocked: false, products: [...byUrl.values()] };
+};
+
+function cardText(inner) {
+  return decodeEntities(inner.replace(/<[^>]*>/g, ' ')).replace(/\s+/g, ' ').trim();
+}
+
+// Name = title attribute of the first <div> that has one (not the img); fallback: text before the first baht sign.
+function bananaTitle(inner, text) {
+  const divRe = /<div\b(?:"[^"]*"|'[^']*'|[^>"'])*>/gi;
+  let t;
+  while ((t = divRe.exec(inner))) {
+    const title = tagAttrs(t[0]).title;
+    if (title && title.trim()) return title.replace(/\s+/g, ' ').trim();
+  }
+  return text.split('฿')[0].trim();
+}
+
+// First baht amount outside <del>/<s>/<strike> (old crossed-out price).
+function bananaPrice(inner) {
+  const live = inner.replace(/<(del|s|strike)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, ' ');
+  const m = /฿\s*([\d,]+(?:\.\d+)?)/.exec(cardText(live));
+  return m ? PS5W.formatPrice(m[1]) : null;
+}
+
+// Banana IT search page: cards are <a href="/th/p/...?ref=search-result">. It lists only items ready to sell.
+PS5W.parseBanana = function parseBanana(status, html, origin) {
+  const problem = PS5W.pageProblem(status, html);
+  if (problem) return { blocked: true, why: problem };
+  const all = anchorList(html);
+  if (!all.some((a) => a.href.includes('ref=search-result'))) return { blocked: true, why: NOT_NORMAL };
+  const byUrl = new Map();
+  for (const a of all) {
+    if (!a.href.includes('/th/p/')) continue;
+    const text = cardText(a.inner);
+    if (!text.includes('฿')) continue;
+    const title = bananaTitle(a.inner, text);
+    const url = PS5W.normalizeUrl(a.href, origin);
+    if (!url || byUrl.has(url) || !PS5W.isConsole(title)) continue;
+    byUrl.set(url, {
+      title,
+      url,
+      price: bananaPrice(a.inner),
+      available: !PS5W.OOS_RE.test(text),
+      reason: 'search card text',
+    });
+  }
+  return { blocked: false, products: [...byUrl.values()] };
 };
 
 // ---------------------------------------------------------------- (later tasks add sections here)
