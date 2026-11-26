@@ -98,3 +98,24 @@ test('blocked on both parsers', () => {
   assert.equal(p.blocked, true);
   assert.equal(PS5W.parseJibProduct(200, '<title>Just a moment...</title>', 'u', 'T').blocked, true);
 });
+
+test('search: error and non-normal pages are blocked, never a clean empty result', () => {
+  const normal = fx('jib-search.html');
+  assert.deepEqual(PS5W.parseJibSearch(500, normal, ORIGIN), { blocked: true, why: 'HTTP 500' });
+  assert.equal(PS5W.parseJibSearch(404, normal, ORIGIN).blocked, true);
+  const c = PS5W.parseJibSearch(200, '<title>Just a moment...</title><a href="/web/product/readProduct/1/1/x">x</a>', ORIGIN);
+  assert.equal(c.blocked, true);
+  assert.ok(c.why.startsWith('challenge page:'));
+  assert.deepEqual(PS5W.parseJibSearch(200, '<html><title>JIB</title><p>oops</p></html>', ORIGIN),
+    { blocked: true, why: 'not the normal search page' });
+  const none = PS5W.parseJibSearch(200, `<a href="${ORIGIN}/web/product/readProduct/3/1/x">Sony PS5 Dualsense Controller</a>`, ORIGIN);
+  assert.deepEqual(none, { blocked: false, links: [] });
+});
+
+test('product: 404 is not blocked but unknown; 403 is blocked', () => {
+  const r = PS5W.parseJibProduct(404, '<html></html>', 'https://www.jib.co.th/p/1', 'FB');
+  assert.deepEqual(r, { blocked: false, product: { title: 'FB', url: 'https://www.jib.co.th/p/1', price: null, available: null, reason: 'HTTP 404' } });
+  const b = PS5W.parseJibProduct(403, '', 'u', 'T');
+  assert.equal(b.blocked, true);
+  assert.equal(b.why, 'HTTP 403');
+});

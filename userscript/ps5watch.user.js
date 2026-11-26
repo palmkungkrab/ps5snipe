@@ -394,6 +394,16 @@ PS5W.isBlockedPage = function isBlockedPage(status, html) {
   return !!t && PS5W.BLOCK_TITLES.test(t[1]);
 };
 
+// null when the page is usable, else a why string: block status/title, or any other non-2xx status.
+PS5W.pageProblem = function pageProblem(status, html) {
+  if ([403, 429, 503].includes(status)) return `HTTP ${status}`;
+  const t = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(String(html || ''));
+  const title = t ? t[1].replace(/\s+/g, ' ').trim() : '';
+  if (PS5W.BLOCK_TITLES.test(title)) return `challenge page: ${title}`;
+  if (!(status >= 200 && status < 300)) return `HTTP ${status}`;
+  return null;
+};
+
 // ---------------------------------------------------------------- stores: JIB parsers
 PS5W.JIB_GAP_MS = 1500;
 PS5W.JIB_MAX_PRODUCTS = 12;
@@ -445,7 +455,9 @@ PS5W.parseJsonld = function parseJsonld(blobs) {
 };
 
 PS5W.parseJibSearch = function parseJibSearch(status, html, origin, selfUrl) {
-  if (PS5W.isBlockedPage(status, html)) return { blocked: true, why: `JIB search blocked (HTTP ${status})` };
+  const problem = PS5W.pageProblem(status, html);
+  if (problem) return { blocked: true, why: problem };
+  if (!/\/web\/product\/readProduct\//.test(String(html || ''))) return { blocked: true, why: 'not the normal search page' };
   const host = new URL(origin).host;
   const self = PS5W.normalizeUrl(selfUrl || PS5W.STORES.jib.searchPath, origin);
   const byUrl = new Map();
@@ -459,7 +471,9 @@ PS5W.parseJibSearch = function parseJibSearch(status, html, origin, selfUrl) {
 };
 
 PS5W.parseJibProduct = function parseJibProduct(status, html, url, fallbackTitle) {
-  if (PS5W.isBlockedPage(status, html)) return { blocked: true, why: `JIB product blocked (HTTP ${status})` };
+  const problem = PS5W.pageProblem(status, html);
+  if (problem && PS5W.isBlockedPage(status, html)) return { blocked: true, why: problem };
+  if (problem) return { blocked: false, product: { title: fallbackTitle, url, price: null, available: null, reason: problem } };
   const src = String(html || '');
   const blobs = [];
   const ldRe = /<script\b[^>]*type\s*=\s*["']?application\/ld\+json["']?[^>]*>([\s\S]*?)<\/script>/gi;

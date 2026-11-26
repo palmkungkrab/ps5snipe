@@ -42,3 +42,11 @@ test('isBlockedPage', () => {
   assert.equal(PS5W.isBlockedPage(200, '<title>PlayStation 5 - Powerbuy</title>'), false);
   assert.equal(PS5W.isBlockedPage(200, '<p>no title</p>'), false);
 });
+
+test('pageProblem', () => {
+  assert.equal(PS5W.pageProblem(200, '<title>PS5</title>'), null);
+  assert.equal(PS5W.pageProblem(403, ''), 'HTTP 403');
+  assert.equal(PS5W.pageProblem(500, ''), 'HTTP 500');
+  assert.equal(PS5W.pageProblem(404, ''), 'HTTP 404');
+  assert.equal(PS5W.pageProblem(200, '<title> Just a  moment... </title>'), 'challenge page: Just a moment...');
+});
