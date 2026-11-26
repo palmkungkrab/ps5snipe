@@ -121,6 +121,43 @@ PS5W.loadItems = function loadItems(value) {
   return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
 };
 
+// ---------------------------------------------------------------- decisions
+PS5W.INTERVAL_MS = 60000;
+PS5W.JITTER_MS = 10000;
+PS5W.STUCK_RETRY_MS = 300000;
+PS5W.LOCK_STALE_MS = 180000;
+PS5W.HEARTBEAT_MS = 15000;
+
+// Block handling: reload once, then "needs you" once, then "watching again" on the first good check.
+PS5W.blockStep = function blockStep(flags, blocked) {
+  const f = flags || {};
+  const reloaded = f.reloaded === true;
+  const stuck = f.stuck === true;
+  if (!blocked) {
+    return {
+      action: stuck ? 'recovered' : 'continue',
+      flags: { reloaded: false, stuck: false },
+    };
+  }
+  if (!reloaded) return { action: 'reload', flags: { reloaded: true, stuck: false } };
+  if (!stuck) return { action: 'needsYou', flags: { reloaded: true, stuck: true } };
+  return { action: 'stillStuck', flags: { reloaded: true, stuck: true } };
+};
+
+// random in [0,1): normal = INTERVAL +/- JITTER (never under 50 s); stuck = fixed retry.
+PS5W.nextDelayMs = function nextDelayMs(kind, random) {
+  if (kind === 'stuck') return PS5W.STUCK_RETRY_MS;
+  return PS5W.INTERVAL_MS - PS5W.JITTER_MS + Math.floor(random * 2 * PS5W.JITTER_MS);
+};
+
+// Heartbeat lock { id, ts }: another tab's fresh lock means it watches; anything else, we do.
+PS5W.lockDecision = function lockDecision(lock, myId, now) {
+  if (!lock || typeof lock !== 'object') return 'mine';
+  if (typeof lock.id !== 'string' || typeof lock.ts !== 'number') return 'mine';
+  if (lock.id === myId) return 'mine';
+  return now - lock.ts > PS5W.LOCK_STALE_MS ? 'mine' : 'other';
+};
+
 // ---------------------------------------------------------------- (later tasks add sections here)
 
 // ---------------------------------------------------------------- browser
