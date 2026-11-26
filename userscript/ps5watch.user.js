@@ -225,6 +225,99 @@ PS5W.cleanSettings = function cleanSettings(raw) {
   return { settings, errors };
 };
 
+// ---------------------------------------------------------------- render
+// Pure: return strings. The browser layer puts BOX_CSS + renderBox() in a shadow root.
+PS5W.escapeHtml = function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+};
+
+PS5W.tabTitle = function tabTitle(mode, storeName) {
+  if (mode === 'stock') return `🔥 IN STOCK · ${storeName}`;
+  if (mode === 'warn') return `⚠️ Needs you · ${storeName}`;
+  if (mode === 'setup') return '⚙️ Set up · PS5 watch';
+  return `🟢 PS5 watch · ${storeName}`;
+};
+
+PS5W.BOX_CSS = `
+.box { position:fixed; right:10px; bottom:10px; z-index:2147483647; width:310px; box-sizing:border-box; background:#111; color:#eee; font:12px/1.45 system-ui,sans-serif; padding:10px 12px; border-radius:10px; box-shadow:0 4px 16px rgba(0,0,0,.4); }
+.box .hd { display:flex; justify-content:space-between; align-items:center; font-weight:700; font-size:13px; }
+.box .x { background:none; border:0; color:#9ca3af; cursor:pointer; font-size:14px; padding:0 2px; }
+.box .st { margin-top:6px; padding:6px 8px; border-radius:6px; background:#1f2937; }
+.box .st.stock { background:#14532d; color:#bbf7d0; font-weight:700; }
+.box .st.warn { background:#713f12; color:#fde68a; }
+.box .err { margin-top:4px; color:#fca5a5; }
+.box ul { list-style:none; margin:8px 0 0; padding:0; }
+.box li { display:flex; justify-content:space-between; gap:8px; padding:3px 0; border-bottom:1px solid #222; }
+.box li.dim { opacity:.5; }
+.box li a { color:#86efac; }
+.box .ft { margin-top:8px; display:flex; justify-content:space-between; align-items:center; color:#9ca3af; gap:6px; }
+.box .ok { color:#86efac; }
+.box button.b { background:#2d2d2d; color:#eee; border:1px solid #444; border-radius:6px; padding:3px 8px; font:inherit; cursor:pointer; }
+.box label { display:block; color:#9ca3af; font-size:11px; }
+.box input { width:100%; box-sizing:border-box; background:#1f1f1f; border:1px solid #444; color:#eee; border-radius:6px; padding:4px 6px; font:inherit; margin:2px 0 6px; }
+.box .hint { color:#9ca3af; font-size:11px; margin:6px 0 8px; }
+.box .errs { color:#fca5a5; font-size:11px; margin:0 0 6px; }
+.pill { position:fixed; right:10px; bottom:10px; z-index:2147483647; background:#111; color:#eee; border:1px solid #444; border-radius:999px; padding:5px 12px; font:12px/1.4 system-ui,sans-serif; cursor:pointer; box-shadow:0 4px 16px rgba(0,0,0,.4); }
+.pill.stock { background:#14532d; color:#bbf7d0; font-weight:700; }
+.pill.warn { background:#713f12; color:#fde68a; }
+`;
+
+function pad2(n) { return String(n).padStart(2, '0'); }
+function clock(ms) {
+  const d = new Date(ms);
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+}
+
+function productList(products, dim) {
+  const rows = (products || []).map((p) => {
+    const mark = p.available === true ? '✅' : p.available === false ? '❌' : '❔';
+    const open = p.available === true
+      ? ` · <a href="${PS5W.escapeHtml(p.url)}" target="_blank" rel="noopener">open</a>` : '';
+    const price = p.price ? PS5W.escapeHtml(p.price) : '';
+    return `<li${dim ? ' class="dim"' : ''}><span>${mark} ${PS5W.escapeHtml(p.title)}</span><span>${price}${open}</span></li>`;
+  });
+  return `<ul>${rows.join('')}</ul>`;
+}
+
+PS5W.renderBox = function renderBox(view) {
+  const esc = PS5W.escapeHtml;
+  const mode = view.mode;
+  const store = esc(view.storeName);
+  if (mode === 'pill') {
+    return `<button class="pill" data-act="expand">${esc(view.pillText)}</button>`;
+  }
+  const hd = `<div class="hd"><span>🎮 PS5 watch · ${store}</span><button class="x" title="Shrink" data-act="shrink">✕</button></div>`;
+  if (mode === 'setup') {
+    const s = view.settings || {};
+    const errs = (view.errors || []).length
+      ? `<div class="errs">Check: ${view.errors.map(esc).join(', ')}</div>` : '';
+    return `<div class="box">${hd}
+<div class="hint">First time on this browser: paste these once. They're saved in this browser only, never in the public repo.</div>${errs}
+<label>Discord webhook link</label><input name="webhook" value="${esc(s.webhook)}" placeholder="https://discord.com/api/webhooks/…">
+<label>Your Discord user ID (for the @mention)</label><input name="userId" value="${esc(s.userId)}" placeholder="1234567890…">
+<label>Healthchecks ping key (one key; checks named powerbuy, banana-it, jib)</label><input name="hcKey" value="${esc(s.hcKey)}" placeholder="abc123…">
+<div class="ft"><span>Shared by all store tabs</span><span><button class="b" data-act="test">Test ping</button> <button class="b" data-act="save">Save</button></span></div></div>`;
+  }
+  const time = view.lastCheck ? clock(view.lastCheck) : '';
+  let st;
+  if (mode === 'stock') {
+    const hit = (view.products || []).find((p) => p.available === true);
+    st = `<div class="st stock">🔥 ${hit ? esc(hit.title) : 'A PS5'} is IN STOCK${time ? ` · checked ${time}` : ''}`;
+  } else if (mode === 'warn') {
+    st = `<div class="st warn">⚠️ ${store} is asking if you're human. Reloaded once, still stuck.<br>Solve the check on this tab and watching restarts by itself.`;
+  } else {
+    st = `<div class="st">🟢 ${time ? `Checked ${time} · next check in about 60 s` : 'Watching'}`;
+  }
+  if (view.error) st += `<div class="err">${esc(view.error)}</div>`;
+  st += '</div>';
+  const hc = mode === 'warn' ? 'Healthchecks: paused' : `Healthchecks ${view.hcOk ? '✓' : '✗'}`;
+  const dc = `Discord ${view.discordOk ? '✓' : '✗'}`;
+  const okCls = (view.discordOk && (view.hcOk || mode === 'warn')) ? ' class="ok"' : '';
+  return `<div class="box">${hd}${st}${productList(view.products, mode === 'warn')}
+<div class="ft"><span${okCls}>${dc} · ${hc}</span><span><button class="b" data-act="test">Test ping</button> <button class="b" data-act="settings">Settings</button></span></div></div>`;
+};
+
 // ---------------------------------------------------------------- (later tasks add sections here)
 
 // ---------------------------------------------------------------- browser
