@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PS5 watch (laptop)
 // @namespace    https://github.com/palmkungkrab/ps5snipe
-// @version      0.1.0
+// @version      1.0.0
 // @description  Watches Powerbuy, Banana IT and JIB for PS5 consoles from real Chrome tabs
 // @match        https://www.powerbuy.co.th/*
 // @match        https://www.bnn.in.th/*
@@ -577,9 +577,385 @@ PS5W.parseBanana = function parseBanana(status, html, origin) {
   return { blocked: false, products: [...byUrl.values()] };
 };
 
-// ---------------------------------------------------------------- (later tasks add sections here)
+// ---------------------------------------------------------------- runner
+// env: { fetchText(url)->Promise<{status,text}>, sleep(ms), now(), random(), getItems(slug), setItems(slug, items),
+//        getFlags(), setFlags(flags), settings(), postDiscord(payload)->Promise<boolean>,
+//        pingHealthchecks(slug)->Promise<boolean>, reload(), render(view) }
+
+// Up to 4 tries. 2xx -> true; 429 -> wait retryAfterMs (or 2 s); throw -> wait 1, 2, 4 s; other status -> false.
+PS5W.postWithRetry = async function postWithRetry(sendOnce, sleep) {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const last = attempt === 3;
+    let res;
+    try {
+      res = await sendOnce();
+    } catch (e) {
+      if (!last) await sleep(2 ** attempt * 1000);
+      continue;
+    }
+    const status = res && res.status;
+    if (status >= 200 && status < 300) return true;
+    if (status !== 429) return false;
+    if (!last) await sleep(res.retryAfterMs || 2000);
+  }
+  return false;
+};
+
+// A webhook reply as postWithRetry wants it. Discord's 429 body has retry_after in seconds.
+PS5W.discordReply = function discordReply(status, text) {
+  let retryAfterMs = 0;
+  if (status === 429) {
+    try {
+      const s = JSON.parse(text).retry_after;
+      if (typeof s === 'number' && s > 0) retryAfterMs = Math.ceil(s * 1000);
+    } catch (e) { /* no usable body: postWithRetry waits 2 s */ }
+  }
+  return { status, retryAfterMs };
+};
+
+const SEARCH_PARSERS = { powerbuy: 'parsePowerbuy', banana: 'parseBanana' };
+
+// Fetch and parse one store. Rejects only when a fetch rejects (network error).
+PS5W.checkStore = async function checkStore(env, store) {
+  const origin = `https://${store.host}`;
+  const searchUrl = origin + store.searchPath;
+  const page = await env.fetchText(searchUrl);
+  if (SEARCH_PARSERS[store.key]) return PS5W[SEARCH_PARSERS[store.key]](page.status, page.text, origin);
+  const search = PS5W.parseJibSearch(page.status, page.text, origin, searchUrl);
+  if (search.blocked) return search;
+  const products = [];
+  for (let i = 0; i < search.links.length; i++) {
+    if (i > 0) await env.sleep(PS5W.JIB_GAP_MS);
+    const link = search.links[i];
+    const res = await env.fetchText(link.url);
+    const r = PS5W.parseJibProduct(res.status, res.text, link.url, link.title);
+    if (r.blocked) return r;
+    products.push(r.product);
+  }
+  return { blocked: false, products };
+};
+
+// Per-env memory: last non-setup view and the Discord result carried between rounds.
+const MEMORY = new WeakMap();
+function memoryOf(env) {
+  if (!MEMORY.has(env)) MEMORY.set(env, { view: null, discordOk: true });
+  return MEMORY.get(env);
+}
+
+async function settled(promiseFn) {
+  try { return (await promiseFn()) === true; } catch (e) { return false; }
+}
+
+// Valid settings, or null after showing the setup box (never posts with a bad webhook or empty user ID).
+function usableSettings(env, store) {
+  const { settings, errors } = PS5W.cleanSettings(env.settings());
+  if (!errors.length) return settings;
+  env.render({ mode: 'setup', storeName: store.name, errors, settings });
+  return null;
+}
+
+function show(env, mem, view) {
+  mem.view = view;
+  env.render(view);
+}
+
+// One round. Returns { delayMs } for the next round, or null when the loop stops (tab reloading, or no settings).
+PS5W.runCheck = async function runCheck(env, store) {
+  const mem = memoryOf(env);
+  const settings = usableSettings(env, store);
+  if (!settings) return null;
+  const prev = mem.view;
+  const flags = env.getFlags();
+  let result;
+  try {
+    result = await PS5W.checkStore(env, store);
+  } catch (e) {
+    const mode = prev ? prev.mode : (flags && flags.stuck === true ? 'warn' : 'ok');
+    show(env, mem, {
+      mode,
+      storeName: store.name,
+      lastCheck: prev ? prev.lastCheck : null,
+      products: prev ? prev.products : [],
+      discordOk: mem.discordOk,
+      hcOk: false,
+      error: `network error: ${e && e.message ? e.message : e}`,
+    });
+    return { delayMs: PS5W.nextDelayMs('normal', env.random()) };
+  }
+
+  const step = PS5W.blockStep(flags, result.blocked);
+  env.setFlags(step.flags);
+  if (step.action === 'reload') {
+    env.reload();
+    return null;
+  }
+  const post = (payload) => settled(() => env.postDiscord(payload));
+
+  if (result.blocked) {
+    if (step.action === 'needsYou') mem.discordOk = await post(PS5W.buildNeedsYou(store.name, settings.userId));
+    show(env, mem, {
+      mode: 'warn',
+      storeName: store.name,
+      lastCheck: prev ? prev.lastCheck : null,
+      products: prev ? prev.products : [],
+      discordOk: mem.discordOk,
+      hcOk: false,
+      error: `blocked: ${result.why}`,
+    });
+    return { delayMs: PS5W.STUCK_RETRY_MS };
+  }
+
+  const now = env.now();
+  const next = PS5W.nextAlerts(PS5W.loadItems(env.getItems(store.hcSlug)), result.products, now, PS5W.RENOTIFY_MS);
+  env.setItems(store.hcSlug, next.items);
+  const payloads = next.alerts.map((p) => PS5W.buildInStock(p, store.name, settings.userId));
+  if (step.action === 'recovered') payloads.push(PS5W.buildWatchingAgain(store.name));
+  if (payloads.length) {
+    let allOk = true;
+    for (const payload of payloads) {
+      if (!(await post(payload))) allOk = false;
+    }
+    mem.discordOk = allOk;
+  }
+  const hcOk = await settled(() => env.pingHealthchecks(store.hcSlug));
+  show(env, mem, {
+    mode: result.products.some((p) => p.available === true) ? 'stock' : 'ok',
+    storeName: store.name,
+    lastCheck: now,
+    products: result.products,
+    discordOk: mem.discordOk,
+    hcOk,
+  });
+  return { delayMs: PS5W.nextDelayMs('normal', env.random()) };
+};
+
+// The box's Test ping. Resolves the Discord result (false when settings are unusable; the setup box is shown).
+PS5W.sendTest = async function sendTest(env, store) {
+  const mem = memoryOf(env);
+  const settings = usableSettings(env, store);
+  if (!settings) return false;
+  const ok = await settled(() => env.postDiscord(PS5W.buildTest(store, settings.userId)));
+  mem.discordOk = ok;
+  if (mem.view) show(env, mem, { ...mem.view, discordOk: ok });
+  return ok;
+};
+
+// Text of the shrunk box.
+PS5W.pillText = function pillText(view) {
+  if (view.mode === 'stock') return `🔥 IN STOCK · ${view.storeName}`;
+  if (view.mode === 'warn') return `⚠️ Needs you · ${view.storeName}`;
+  if (view.mode === 'setup') return '⚙️ Set up';
+  if (!view.lastCheck) return `🟢 ${view.storeName}`;
+  const d = new Date(view.lastCheck);
+  return `🟢 ${view.storeName} · ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+};
 
 // ---------------------------------------------------------------- browser
-function bootstrap() {}
+// Thin layer over the core: storage, timers, the shadow-root box, GM requests. Checked live (not by Node tests).
+/* global GM_getValue, GM_setValue, GM_xmlhttpRequest */
+function bootstrap() {
+  const store = PS5W.storeForHost(location.host);
+  if (!store) return;
+  const OTHER_RETRY_MS = 60000;
+  const LOCK_KEY = 'ps5watch-lock';
+
+  // Every storage read falls back to a default; every write is best effort.
+  const read = (fn, fallback) => {
+    try { const v = fn(); return v === null || v === undefined ? fallback : v; } catch (e) { return fallback; }
+  };
+  const write = (fn) => { try { fn(); } catch (e) { /* storage blocked or full: keep watching */ } };
+  const readJson = (getStorage, key, fallback) => read(() => JSON.parse(getStorage().getItem(key)), fallback);
+  const readSettings = () => read(() => GM_getValue('settings', null), null);
+  const tabId = read(() => {
+    let id = sessionStorage.getItem('ps5watch-tab-id');
+    if (!id) {
+      id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+      sessionStorage.setItem('ps5watch-tab-id', id);
+    }
+    return id;
+  }, `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`);
+  const lockNow = () => PS5W.lockDecision(readJson(() => localStorage, LOCK_KEY, null), tabId, Date.now());
+
+  const host = document.createElement('div');
+  const root = host.attachShadow({ mode: 'open' });
+  document.documentElement.appendChild(host);
+  const paint = (html) => { root.innerHTML = `<style>${PS5W.BOX_CSS}</style>${html}`; };
+  const pill = (text) => paint(PS5W.renderBox({ mode: 'pill', storeName: store.name, pillText: text }));
+
+  // Any other tab of the store (shopping, checkout): never checks, never reloads, never touches the title.
+  if (location.hash !== '#ps5watch') {
+    const showPill = () => pill(lockNow() === 'other' ? 'PS5 watch running in another tab' : 'PS5 watch: no watcher tab open');
+    showPill();
+    setInterval(showPill, OTHER_RETRY_MS);
+    return;
+  }
+
+  let holding = false; // this tab owns the lock
+  let heartbeat = null;
+  let running = false; // the check loop is scheduled or in flight
+  let settingsTimer = null;
+  let editing = false; // the settings form is on screen: loop renders update the title only
+  let shown = null; // view currently drawn
+  let lastWatch = null; // last non-setup view from the core
+
+  const isMin = () => read(() => sessionStorage.getItem('ps5watch-min'), '') === '1';
+  const draw = (view) => {
+    shown = view;
+    paint(isMin()
+      ? PS5W.renderBox({ mode: 'pill', storeName: store.name, pillText: PS5W.pillText(view) })
+      : PS5W.renderBox(view));
+  };
+  const setupView = (settings, errors) => ({ mode: 'setup', storeName: store.name, settings, errors });
+
+  function gmRequest(details) {
+    return new Promise((resolve, reject) => {
+      GM_xmlhttpRequest({
+        timeout: 15000,
+        ...details,
+        onload: resolve,
+        onerror: () => reject(new Error('request failed')),
+        ontimeout: () => reject(new Error('request timed out')),
+        onabort: () => reject(new Error('request aborted')),
+      });
+    });
+  }
+
+  const env = {
+    fetchText: async (url) => {
+      // A stalled request becomes a network error after 30 s instead of hanging the loop.
+      const r = await fetch(url, { cache: 'no-store', credentials: 'include', signal: AbortSignal.timeout(30000) });
+      return { status: r.status, text: await r.text() };
+    },
+    sleep: (ms) => new Promise((resolve) => { setTimeout(resolve, ms); }),
+    now: () => Date.now(),
+    random: () => Math.random(),
+    getItems: (slug) => read(() => GM_getValue(`items:${slug}`, {}), {}),
+    setItems: (slug, items) => write(() => GM_setValue(`items:${slug}`, items)),
+    getFlags: () => readJson(() => sessionStorage, 'ps5watch-flags', {}),
+    setFlags: (flags) => write(() => sessionStorage.setItem('ps5watch-flags', JSON.stringify(flags))),
+    settings: readSettings,
+    postDiscord: (payload) => PS5W.postWithRetry(async () => {
+      const r = await gmRequest({
+        method: 'POST',
+        url: PS5W.cleanSettings(readSettings()).settings.webhook,
+        headers: { 'Content-Type': 'application/json' },
+        data: JSON.stringify(payload),
+      });
+      return PS5W.discordReply(r.status, r.responseText);
+    }, env.sleep),
+    pingHealthchecks: async (slug) => {
+      try {
+        const r = await gmRequest({ method: 'GET', url: PS5W.hcUrl(PS5W.cleanSettings(readSettings()).settings.hcKey, slug) });
+        return r.status >= 200 && r.status < 300;
+      } catch (e) {
+        return false;
+      }
+    },
+    reload: () => location.reload(),
+    render: (view) => {
+      document.title = PS5W.tabTitle(view.mode, store.name);
+      if (view.mode === 'setup') {
+        editing = true;
+        draw(view);
+        return;
+      }
+      lastWatch = view;
+      if (!editing) draw(view);
+    },
+  };
+
+  function stopHolding() {
+    holding = false;
+    running = false;
+    clearInterval(heartbeat);
+    pill('PS5 watch already watching in another tab');
+    setTimeout(claim, OTHER_RETRY_MS);
+  }
+
+  async function tick() {
+    if (lockNow() !== 'mine') {
+      stopHolding();
+      return;
+    }
+    let r;
+    try {
+      r = await PS5W.runCheck(env, store);
+    } catch (e) {
+      r = { delayMs: PS5W.nextDelayMs('normal', Math.random()) }; // never let the loop die
+    }
+    if (!holding) return;
+    if (r) {
+      setTimeout(tick, r.delayMs);
+    } else {
+      running = false; // reloading, or waiting for settings (another tab may save them)
+      clearTimeout(settingsTimer);
+      settingsTimer = setTimeout(waitForSettings, OTHER_RETRY_MS);
+    }
+  }
+
+  function start() {
+    if (running || !holding) return;
+    running = true;
+    tick();
+  }
+
+  function waitForSettings() {
+    if (running || !holding) return;
+    if (!PS5W.cleanSettings(readSettings()).errors.length) {
+      editing = false;
+      start();
+      return;
+    }
+    settingsTimer = setTimeout(waitForSettings, OTHER_RETRY_MS);
+  }
+
+  function claim() {
+    if (lockNow() !== 'mine') {
+      pill('PS5 watch already watching in another tab');
+      setTimeout(claim, OTHER_RETRY_MS);
+      return;
+    }
+    const writeLock = () => write(() => localStorage.setItem(LOCK_KEY, JSON.stringify({ id: tabId, ts: Date.now() })));
+    holding = true;
+    writeLock();
+    heartbeat = setInterval(() => { if (lockNow() === 'mine') writeLock(); }, PS5W.HEARTBEAT_MS);
+    start();
+  }
+
+  // Save: show the errors, or store the settings and make sure the loop runs.
+  function saveForm() {
+    const value = (name) => { const el = root.querySelector(`input[name="${name}"]`); return el ? el.value : ''; };
+    const { settings, errors } = PS5W.cleanSettings({ webhook: value('webhook'), userId: value('userId'), hcKey: value('hcKey') });
+    if (errors.length) {
+      draw(setupView(settings, errors));
+      return false;
+    }
+    write(() => GM_setValue('settings', settings));
+    editing = false;
+    draw(lastWatch || { mode: 'ok', storeName: store.name, lastCheck: null, products: [], discordOk: true, hcOk: true });
+    start();
+    return true;
+  }
+
+  root.addEventListener('click', (ev) => {
+    const btn = ev.target && ev.target.closest ? ev.target.closest('[data-act]') : null;
+    if (!btn || !holding) return;
+    const act = btn.getAttribute('data-act');
+    if (act === 'save') saveForm();
+    else if (act === 'test') {
+      // From the form, Test saves first, so a test only ever uses stored, valid settings.
+      if (editing && !saveForm()) return;
+      PS5W.sendTest(env, store);
+    } else if (act === 'settings') {
+      editing = true;
+      draw(setupView(PS5W.cleanSettings(readSettings()).settings, []));
+    } else if (act === 'shrink' || act === 'expand') {
+      write(() => sessionStorage.setItem('ps5watch-min', act === 'shrink' ? '1' : '0'));
+      if (shown) draw(shown);
+    }
+  });
+
+  claim();
+}
 
 if (typeof module === 'object' && module.exports) module.exports = PS5W; else bootstrap();
