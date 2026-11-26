@@ -158,6 +158,73 @@ PS5W.lockDecision = function lockDecision(lock, myId, now) {
   return now - lock.ts > PS5W.LOCK_STALE_MS ? 'mine' : 'other';
 };
 
+// ---------------------------------------------------------------- messages
+// Payloads mirror ps5snipe/notify.py (Discord.in_stock / info).
+PS5W.LABEL = '💻 laptop';
+
+PS5W.buildInStock = function buildInStock(product, storeName, userId) {
+  return {
+    content: `<@${userId}> 🟢 **PS5 IN STOCK at ${storeName}!** ${PS5W.LABEL} ${product.url}`,
+    embeds: [{
+      title: String(product.title).slice(0, 250),
+      url: product.url,
+      color: 0x2ECC71,
+      fields: [
+        { name: 'Store', value: storeName, inline: true },
+        { name: 'Price', value: product.price || '-', inline: true },
+        { name: 'Detected by', value: product.reason || '-', inline: false },
+      ],
+      timestamp: new Date().toISOString(),
+    }],
+    allowed_mentions: { users: [userId] },
+  };
+};
+
+PS5W.buildNeedsYou = function buildNeedsYou(storeName, userId) {
+  return {
+    content: `<@${userId}> ⚠️ **${storeName} needs you** ${PS5W.LABEL}\n`
+      + `${storeName} is asking whether you're human. The tab reloaded once and is still stuck, so **${storeName} is NOT being watched**. `
+      + `Solve the check on the ${storeName} tab on the laptop and watching restarts by itself.`,
+    allowed_mentions: { users: [userId] },
+  };
+};
+
+PS5W.buildWatchingAgain = function buildWatchingAgain(storeName) {
+  return {
+    content: `✅ ${storeName} is being watched again ${PS5W.LABEL}`,
+    allowed_mentions: { parse: [] },
+  };
+};
+
+PS5W.buildTest = function buildTest(store, userId) {
+  return PS5W.buildInStock({
+    title: 'Test notification from ps5watch (not a real restock)',
+    url: PS5W.watchUrl(store).replace('#ps5watch', ''),
+    price: '฿0',
+    reason: 'test ping button',
+    available: true,
+  }, `TEST (${store.name})`, userId);
+};
+
+PS5W.hcUrl = function hcUrl(key, slug) {
+  return `https://hc-ping.com/${key}/${slug}`;
+};
+
+// ---------------------------------------------------------------- settings
+PS5W.cleanSettings = function cleanSettings(raw) {
+  const r = raw || {};
+  const settings = {
+    webhook: String(r.webhook == null ? '' : r.webhook).trim(),
+    userId: String(r.userId == null ? '' : r.userId).trim(),
+    hcKey: String(r.hcKey == null ? '' : r.hcKey).trim(),
+  };
+  const errors = [];
+  if (!/^https:\/\/(discord|discordapp)\.com\/api\/webhooks\/\d+\/[\w-]+$/.test(settings.webhook)) errors.push('Discord webhook link');
+  if (!/^\d{17,20}$/.test(settings.userId)) errors.push('Discord user ID');
+  if (!/^[A-Za-z0-9_-]{8,}$/.test(settings.hcKey)) errors.push('Healthchecks ping key');
+  return { settings, errors };
+};
+
 // ---------------------------------------------------------------- (later tasks add sections here)
 
 // ---------------------------------------------------------------- browser
