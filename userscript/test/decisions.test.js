@@ -68,6 +68,13 @@ test('firstDelayMs: the first check after a load waits out the normal gap since 
   assert.equal(PS5W.firstDelayMs('1699999990000', now, 0.5), 0);
 });
 
+test('firstDelayMs: a last check in the future (clock moved back) never waits more than one normal gap', () => {
+  const now = 1700000000000;
+  assert.equal(PS5W.firstDelayMs(now + 3600000, now, 0.5), 60000);
+  assert.equal(PS5W.firstDelayMs(now + 1, now, 0), 50000);
+  assert.equal(PS5W.firstDelayMs(now, now, 0.999), PS5W.nextDelayMs('normal', 0.999));
+});
+
 test('isWatcherLocation: #ps5watch on the store watch path only (query ignored)', () => {
   const loc = (pathname, hash, search = '') => ({ pathname, hash, search });
   const pb = PS5W.STORES.powerbuy;

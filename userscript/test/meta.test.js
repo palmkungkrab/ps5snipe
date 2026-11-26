@@ -46,6 +46,13 @@ test('status box shadow root is closed and never read back (settings form holds 
   assert.doesNotMatch(text, /\.shadowRoot\b/);
 });
 
+test('non-watcher pills are passive, so they never cover a checkout button', () => {
+  assert.match(text, /const pill = \(text\) => paint\(PS5W\.renderBox\(\{[^}]*passive: true[^}]*\}\)\);/);
+  const pillCalls = text.match(/\bpill\('[^']*'\)/g) || [];
+  assert.ok(pillCalls.length >= 2, 'already-watching pills go through pill()');
+  assert.match(text, /const showOtherPill = \(\) => pill\(/);
+});
+
 test('store table', () => {
   const PS5W = require('../ps5watch.user.js');
   assert.equal(PS5W.storeForHost('www.powerbuy.co.th').name, 'Powerbuy');

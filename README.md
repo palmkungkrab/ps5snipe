@@ -17,7 +17,7 @@ and automated browsers. dotlife stays off.
 
 **Who watches what:** GitHub Actions = Sony Store TH + JIB. The laptop browser = Powerbuy + Banana IT + JIB.
 JIB is watched twice on purpose, so a JIB restock can ping twice. Every ping is labelled 💻 laptop or ☁️ GitHub.
-The old Python laptop runner is retired. (`config.yaml` keeps the other sites `enabled: false`; GitHub picks its
+The old Python laptop runner is retired. (`config.yaml` keeps every site `enabled: false`; GitHub picks its
 sites with `--site`, which ignores `enabled`.)
 
 Only **consoles** trigger alerts. Games, controllers, covers, stands, disc drives, VR2 and Portal are ignored
@@ -47,6 +47,10 @@ DISCORD_USER_ID=123456789012345678
 ```
 
 4. Check it works: `python -m ps5snipe --test-notify` (you should get a ping).
+
+> **Retired:** the laptop now runs the browser userscript instead (see [Laptop browser watcher](#laptop-browser-watcher)).
+> The Run, 24/7 and Windows-task sections below describe the old Python laptop runner. They are kept for reference;
+> every site in `config.yaml` is now `enabled: false`, so a bare `python -m ps5snipe` has nothing to check.
 
 ## Run
 
@@ -88,7 +92,7 @@ Restart=always
 WantedBy=multi-user.target
 ```
 
-### GitHub Actions (backup while your PC is off)
+## GitHub Actions: Sony Store TH + JIB
 
 `.github/workflows/watch.yml` runs every 5 minutes on GitHub and keeps checking **Sony Store TH and JIB**
 for 6 minutes per run (Sony ~every 30s, JIB ~every 60s). Runs overlap on purpose: the next one is already

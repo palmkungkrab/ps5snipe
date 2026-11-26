@@ -51,6 +51,9 @@ A box shows in the corner of the tab. Fill in:
 Click **Save**, then click **Test ping**. A message that says **💻 laptop** should arrive in Discord.
 All three store tabs share these settings, so you paste them only once.
 
+If you think your Discord webhook link leaked, delete that webhook in Discord, make a new one, and paste the
+new link here (and into `.env`).
+
 ## 5. Set up Chrome
 
 1. **Settings → Performance → Always keep these sites active.** Add `powerbuy.co.th`, `bnn.in.th`
@@ -71,6 +74,7 @@ All three store tabs share these settings, so you paste them only once.
   To start again, open the bookmark again.
 - **Do not use Chrome's "Duplicate tab" on a watcher tab.** The copy keeps the same tab identity,
   so you get two watchers. Open the bookmark instead.
+- **Don't shop in a watcher tab.** To buy, open the store in another tab and leave the watcher tab alone.
 
 ## Pings
 
@@ -103,3 +107,6 @@ Fix it: check the laptop and Wi-Fi, then open the store's bookmark again.
 
 Tampermonkey gets new versions from the `main` branch by itself. It only updates when the
 `@version` number at the top of `ps5watch.user.js` goes up.
+
+To update right away: open the Tampermonkey dashboard, open the script and check for updates
+(or use the dashboard's update-check button), then reload the three watcher tabs.

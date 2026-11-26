@@ -54,9 +54,11 @@ sites:
     urls:
       - https://www.jib.co.th/web/product/product_search/0?str_search=playstation%205
 
-  # --- Banana IT (official PlayStation retailer). Blocks GitHub's servers; works from a Thai home connection ---
+  # --- Banana IT (official PlayStation retailer). Blocks GitHub's servers ---
+  # Off: the laptop now watches Banana IT from a real Chrome tab with the userscript (see userscript/README.md).
   - name: Banana IT
     type: browser
+    enabled: false
     urls:
       - https://www.bnn.in.th/th/p/gaming-gear/console/playstation-0
 

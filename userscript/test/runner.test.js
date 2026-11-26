@@ -217,6 +217,25 @@ test('network error keeps the current mode and products of the last good check',
   assert.equal(v.error, 'network error: offline');
 });
 
+function assertQuietFailure(env, r) {
+  assert.ok(inNormalRange(r), JSON.stringify(r));
+  assert.equal(env.calls.reload, 0);
+  assert.equal(env.calls.post.length, 0);
+  assert.equal(env.calls.ping.length, 0);
+  assert.equal(env.calls.setItems.length, 0);
+  assert.equal(env.calls.setFlags.length, 0);
+}
+
+test('an exception that is not from a fetch is "check failed", otherwise handled like a network error', async () => {
+  const env = fakeEnv();
+  env.state.flags = { reloaded: true, stuck: false };
+  env.page = () => null; // the fetch resolves; reading its reply throws
+  const r = await PS5W.runCheck(env, PB);
+  assertQuietFailure(env, r);
+  assert.match(lastRender(env).error, /^check failed: /);
+  assert.doesNotMatch(lastRender(env).error, /network/);
+});
+
 test('Banana: one fetch of the search page; an empty normal page is a good check', async () => {
   const env = fakeEnv();
   env.page = () => ({ status: 200, text: fx('banana-search.html') });
@@ -278,6 +297,22 @@ test('JIB: a blocked search page fetches no product pages', async () => {
   assert.equal(res.blocked, true);
   assert.equal(env.calls.fetch.length, 1);
   assert.equal(env.calls.sleep.length, 0);
+});
+
+test('JIB: a product fetch rejecting is a network error; a failing sleep is "check failed"', async () => {
+  const env = fakeEnv();
+  env.page = (url) => {
+    if (url === JIB_SEARCH_URL) return { status: 200, text: jibSearch2 };
+    throw new Error('request timed out');
+  };
+  assertQuietFailure(env, await PS5W.runCheck(env, JIB));
+  assert.equal(lastRender(env).error, 'network error: request timed out');
+
+  const env2 = fakeEnv();
+  env2.page = (url) => ({ status: 200, text: url === JIB_SEARCH_URL ? jibSearch2 : jibOut });
+  env2.sleep = async () => { throw new Error('timer gone'); };
+  assertQuietFailure(env2, await PS5W.runCheck(env2, JIB));
+  assert.equal(lastRender(env2).error, 'check failed: timer gone');
 });
 
 test('invalid settings: no fetch, no post, setup box with errors and the saved values, loop stops', async () => {
@@ -342,6 +377,18 @@ test('postWithRetry: 429 without retryAfterMs waits 2 s', async () => {
   const slept = [];
   assert.equal(await PS5W.postWithRetry(async () => replies.shift(), async (ms) => { slept.push(ms); }), true);
   assert.deepEqual(slept, [2000]);
+});
+
+test('postWithRetry: a huge retryAfterMs waits at most 30 s', async () => {
+  const replies = [{ status: 429, retryAfterMs: 3600000 }, { status: 204 }];
+  const slept = [];
+  assert.equal(await PS5W.postWithRetry(async () => replies.shift(), async (ms) => { slept.push(ms); }), true);
+  assert.deepEqual(slept, [30000]);
+});
+
+test('discordReply caps retry_after at 30 s', () => {
+  assert.deepEqual(PS5W.discordReply(429, '{"retry_after":3600}'), { status: 429, retryAfterMs: 30000 });
+  assert.deepEqual(PS5W.discordReply(429, '{"retry_after":29.5}'), { status: 429, retryAfterMs: 29500 });
 });
 
 test('postWithRetry: other HTTP errors give up at once', async () => {

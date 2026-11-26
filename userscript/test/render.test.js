@@ -107,7 +107,17 @@ test('pill view: text and expand button, no list', () => {
   const h = PS5W.renderBox({ ...base, mode: 'pill', pillText: '🟢 Powerbuy · 20:41' });
   assert.match(h, /🟢 Powerbuy · 20:41/);
   assert.match(h, /data-act="expand"/);
+  assert.doesNotMatch(h, /passive/);
   assert.doesNotMatch(h, /<ul>/);
+});
+
+test('passive pill (other tabs): plain text that never takes a click', () => {
+  const h = PS5W.renderBox({ mode: 'pill', storeName: 'Powerbuy', pillText: 'PS5 watch running in another tab', passive: true });
+  assert.match(h, /PS5 watch running in another tab/);
+  assert.match(h, /class="pill passive"/);
+  assert.doesNotMatch(h, /data-act/);
+  assert.doesNotMatch(h, /<button/);
+  assert.match(PS5W.BOX_CSS, /\.pill\.passive\s*\{[^}]*pointer-events:\s*none/);
 });
 
 test('hostile product strings are escaped', () => {

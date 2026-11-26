@@ -159,9 +159,11 @@ PS5W.lockDecision = function lockDecision(lock, myId, now) {
 };
 
 // First check after a page load (including the block reload): wait out a normal gap since the last check started.
+// Never more than one normal gap, so a clock that moved backwards can't stall the first check.
 PS5W.firstDelayMs = function firstDelayMs(lastCheckAt, now, random) {
   if (!Number.isFinite(lastCheckAt)) return 0;
-  return Math.max(0, lastCheckAt + PS5W.nextDelayMs('normal', random) - now);
+  const gap = PS5W.nextDelayMs('normal', random);
+  return Math.min(Math.max(0, lastCheckAt + gap - now), gap);
 };
 
 // A tab watches only on its store's watch page with #ps5watch. Path only: stores may rewrite the query.
@@ -283,6 +285,7 @@ PS5W.BOX_CSS = `
 .pill { position:fixed; right:10px; bottom:10px; z-index:2147483647; background:#111; color:#eee; border:1px solid #444; border-radius:999px; padding:5px 12px; font:12px/1.4 system-ui,sans-serif; cursor:pointer; box-shadow:0 4px 16px rgba(0,0,0,.4); }
 .pill.stock { background:#14532d; color:#bbf7d0; font-weight:700; }
 .pill.warn { background:#713f12; color:#fde68a; }
+.pill.passive { pointer-events:none; cursor:default; }
 `;
 
 function pad2(n) { return String(n).padStart(2, '0'); }
@@ -307,6 +310,8 @@ PS5W.renderBox = function renderBox(view) {
   const mode = view.mode;
   const store = esc(view.storeName);
   if (mode === 'pill') {
+    // Passive (non-watcher tabs): text only, clicks pass through to the store page (checkout buttons).
+    if (view.passive) return `<div class="pill passive">${esc(view.pillText)}</div>`;
     return `<button class="pill" data-act="expand">${esc(view.pillText)}</button>`;
   }
   const hd = `<div class="hd"><span>🎮 PS5 watch · ${store}</span><button class="x" title="Shrink" data-act="shrink">✕</button></div>`;
@@ -648,7 +653,9 @@ PS5W.parseBanana = function parseBanana(status, html, origin) {
 //        getFlags(), setFlags(flags), settings(), postDiscord(payload)->Promise<boolean>,
 //        pingHealthchecks(slug)->Promise<boolean>, reload(), render(view) }
 
-// Up to 4 tries. 2xx -> true; 429 -> wait retryAfterMs (or 2 s); throw -> wait 1, 2, 4 s; other status -> false.
+PS5W.MAX_RETRY_AFTER_MS = 30000;
+
+// Up to 4 tries. 2xx -> true; 429 -> wait retryAfterMs (or 2 s; at most 30 s); throw -> wait 1, 2, 4 s; other status -> false.
 PS5W.postWithRetry = async function postWithRetry(sendOnce, sleep) {
   for (let attempt = 0; attempt < 4; attempt++) {
     const last = attempt === 3;
@@ -662,7 +669,7 @@ PS5W.postWithRetry = async function postWithRetry(sendOnce, sleep) {
     const status = res && res.status;
     if (status >= 200 && status < 300) return true;
     if (status !== 429) return false;
-    if (!last) await sleep(res.retryAfterMs || 2000);
+    if (!last) await sleep(Math.min(res.retryAfterMs || 2000, PS5W.MAX_RETRY_AFTER_MS));
   }
   return false;
 };
@@ -673,7 +680,7 @@ PS5W.discordReply = function discordReply(status, text) {
   if (status === 429) {
     try {
       const s = JSON.parse(text).retry_after;
-      if (typeof s === 'number' && s > 0) retryAfterMs = Math.ceil(s * 1000);
+      if (typeof s === 'number' && s > 0) retryAfterMs = Math.min(Math.ceil(s * 1000), PS5W.MAX_RETRY_AFTER_MS);
     } catch (e) { /* no usable body: postWithRetry waits 2 s */ }
   }
   return { status, retryAfterMs };
@@ -681,11 +688,22 @@ PS5W.discordReply = function discordReply(status, text) {
 
 const SEARCH_PARSERS = { powerbuy: 'parsePowerbuy', banana: 'parseBanana' };
 
-// Fetch and parse one store. Rejects only when a fetch rejects (network error).
+// env.fetchText, with its rejection marked as a network error (anything else that throws is not one).
+async function fetchPage(env, url) {
+  try {
+    return await env.fetchText(url);
+  } catch (e) {
+    const err = new Error(e && e.message ? e.message : String(e));
+    err.network = true;
+    throw err;
+  }
+}
+
+// Fetch and parse one store. A rejected fetch rejects with err.network set.
 PS5W.checkStore = async function checkStore(env, store) {
   const origin = `https://${store.host}`;
   const searchUrl = origin + store.searchPath;
-  const page = await env.fetchText(searchUrl);
+  const page = await fetchPage(env, searchUrl);
   if (SEARCH_PARSERS[store.key]) return PS5W[SEARCH_PARSERS[store.key]](page.status, page.text, origin);
   const search = PS5W.parseJibSearch(page.status, page.text, origin, searchUrl);
   if (search.blocked) return search;
@@ -693,7 +711,7 @@ PS5W.checkStore = async function checkStore(env, store) {
   for (let i = 0; i < search.links.length; i++) {
     if (i > 0) await env.sleep(PS5W.JIB_GAP_MS);
     const link = search.links[i];
-    const res = await env.fetchText(link.url);
+    const res = await fetchPage(env, link.url);
     const r = PS5W.parseJibProduct(res.status, res.text, link.url, link.title);
     if (r.blocked) return r;
     products.push(r.product);
@@ -745,7 +763,7 @@ PS5W.runCheck = async function runCheck(env, store) {
       discordOk: mem.discordOk,
       hcOk: false,
       why: prev ? prev.why : undefined,
-      error: `network error: ${e && e.message ? e.message : e}`,
+      error: `${e && e.network ? 'network error' : 'check failed'}: ${e && e.message ? e.message : e}`,
     });
     return { delayMs: PS5W.nextDelayMs('normal', env.random()) };
   }
@@ -850,7 +868,7 @@ function bootstrap() {
   const root = host.attachShadow({ mode: 'closed' });
   document.documentElement.appendChild(host);
   const paint = (html) => { root.innerHTML = `<style>${PS5W.BOX_CSS}</style>${html}`; };
-  const pill = (text) => paint(PS5W.renderBox({ mode: 'pill', storeName: store.name, pillText: text }));
+  const pill = (text) => paint(PS5W.renderBox({ mode: 'pill', storeName: store.name, pillText: text, passive: true }));
 
   // Any other tab of the store (shopping, checkout): never checks, never reloads, never touches the title.
   const showOtherPill = () => pill(lockNow() === 'other' ? 'PS5 watch running in another tab' : 'PS5 watch: no watcher tab open');
