@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PS5 watch (laptop)
 // @namespace    https://github.com/palmkungkrab/ps5snipe
-// @version      1.2.0
+// @version      1.2.1
 // @description  Watches Powerbuy, Banana IT, JIB, Dotlife and Makro PRO for PS5 consoles from real Chrome tabs
 // @match        https://www.powerbuy.co.th/*
 // @match        https://www.bnn.in.th/*
@@ -46,7 +46,8 @@ PS5W.STORES = {
     },
   },
   // Server-rendered search page (Next.js): product data with a stock flag is in __NEXT_DATA__, like Powerbuy.
-  makro: { key: 'makro', name: 'Makro PRO', host: 'www.makro.pro', searchPath: '/th/c/search?q=ps5', hcSlug: 'makro' },
+  // No /th prefix: Thai is the default language, and the app rewrites /th/... to /... and drops #ps5watch (seen live).
+  makro: { key: 'makro', name: 'Makro PRO', host: 'www.makro.pro', searchPath: '/c/search?q=ps5', hcSlug: 'makro' },
 };
 
 PS5W.storeForHost = function storeForHost(host) {

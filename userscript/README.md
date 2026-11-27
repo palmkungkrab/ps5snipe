@@ -43,7 +43,7 @@ That ending is what tells the script "this tab is a watcher".
 | Banana IT | `https://www.bnn.in.th/th/p?q=playstation%205#ps5watch` |
 | JIB | `https://www.jib.co.th/web/product/product_search/0?str_search=playstation%205#ps5watch` |
 | Dotlife | `https://www.dotlife.store/digital-lifestyle/gaming-toy/gaming-console.html?brand%5Bfilter%5D=SONY%2C481&page=1#ps5watch` |
-| Makro PRO | `https://www.makro.pro/th/c/search?q=ps5#ps5watch` |
+| Makro PRO | `https://www.makro.pro/c/search?q=ps5#ps5watch` (no `/th`: Makro drops `#ps5watch` when it removes it) |
 
 Open each bookmark in its own tab. Leave the five tabs open.
 

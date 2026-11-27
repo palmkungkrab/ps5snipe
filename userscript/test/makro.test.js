@@ -112,8 +112,10 @@ test('Makro store entry: search for ps5, Healthchecks slug makro', () => {
   const s = PS5W.storeForHost('www.makro.pro');
   assert.equal(s.name, 'Makro PRO');
   assert.equal(s.hcSlug, 'makro');
-  assert.equal(PS5W.watchUrl(s), 'https://www.makro.pro/th/c/search?q=ps5#ps5watch');
-  assert.ok(PS5W.isWatcherLocation({ hash: '#ps5watch', pathname: '/th/c/search' }, s));
+  // No /th: Thai is Makro's default language, and the app rewrites /th/... to /... and drops #ps5watch (seen live
+  // 2026-11-27), so the tab would never watch.
+  assert.equal(PS5W.watchUrl(s), 'https://www.makro.pro/c/search?q=ps5#ps5watch');
+  assert.ok(PS5W.isWatcherLocation({ hash: '#ps5watch', pathname: '/c/search' }, s));
 });
 
 test('Makro check: one fetch of the search page, then the Makro parser', async () => {
@@ -123,7 +125,7 @@ test('Makro check: one fetch of the search page, then the Makro parser', async (
     sleep: async () => {},
   };
   const r = await PS5W.checkStore(env, PS5W.STORES.makro);
-  assert.deepEqual(fetched, [['https://www.makro.pro/th/c/search?q=ps5', undefined]]);
+  assert.deepEqual(fetched, [['https://www.makro.pro/c/search?q=ps5', undefined]]);
   assert.equal(r.blocked, false);
   assert.equal(r.products[0].available, true);
 });
