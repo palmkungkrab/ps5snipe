@@ -24,6 +24,7 @@ test('metadata block has the required lines', () => {
   has('@match https://www.bnn.in.th/*');
   has('@match https://www.jib.co.th/*');
   has('@match https://www.dotlife.store/*');
+  has('@match https://www.makro.pro/*');
   has('@grant GM_getValue');
   has('@grant GM_setValue');
   has('@grant GM_xmlhttpRequest');

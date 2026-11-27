@@ -1,6 +1,6 @@
 # Laptop browser watcher
 
-A small Tampermonkey script. It watches **Powerbuy, Banana IT, JIB and Dotlife** from real Chrome tabs on the laptop.
+A small Tampermonkey script. It watches **Powerbuy, Banana IT, JIB, Dotlife and Makro PRO** from real Chrome tabs on the laptop.
 Real Chrome gets past the checks that block the Python watcher. When a PS5 console comes into stock,
 it pings your Discord with an `@mention`.
 
@@ -12,11 +12,11 @@ They are saved in the browser only.
 Healthchecks tells you when a tab stops checking in.
 
 1. Make a free account at [healthchecks.io](https://healthchecks.io).
-2. Make four checks. Use exactly these names: `powerbuy`, `banana-it`, `jib`, `dotlife`.
+2. Make five checks. Use exactly these names: `powerbuy`, `banana-it`, `jib`, `dotlife`, `makro`.
 3. For each check, set **Period** to 5 minutes and **Grace** to 5 minutes.
-4. **Set each check's Slug** to the same word (`powerbuy`, `banana-it`, `jib`, `dotlife`). Renaming a check does
+4. **Set each check's Slug** to the same word (`powerbuy`, `banana-it`, `jib`, `dotlife`, `makro`). Renaming a check does
    not set its slug. Check it: on the Checks page click **slug** in the "Ping URL" header. Each row
-   must end in `/powerbuy`, `/banana-it`, `/jib` or `/dotlife`, not "slug not set". If a slug is missing, the box
+   must end in `/powerbuy`, `/banana-it`, `/jib`, `/dotlife` or `/makro`, not "slug not set". If a slug is missing, the box
    shows **Healthchecks ✗**.
 5. Open **Settings → Ping key** and copy the project's **ping key** (about 22 characters). Do not
    copy a full check URL or a check's 36-character ID.
@@ -32,7 +32,7 @@ Healthchecks tells you when a tab stops checking in.
 3. Open this link: <https://raw.githubusercontent.com/palmkungkrab/ps5snipe/main/userscript/ps5watch.user.js>
    Tampermonkey offers to install the script. Click **Install**.
 
-## 3. Open the four watcher bookmarks
+## 3. Open the five watcher bookmarks
 
 Make one Chrome bookmark for each link below. Keep the `#ps5watch` at the end.
 That ending is what tells the script "this tab is a watcher".
@@ -43,8 +43,9 @@ That ending is what tells the script "this tab is a watcher".
 | Banana IT | `https://www.bnn.in.th/th/p?q=playstation%205#ps5watch` |
 | JIB | `https://www.jib.co.th/web/product/product_search/0?str_search=playstation%205#ps5watch` |
 | Dotlife | `https://www.dotlife.store/digital-lifestyle/gaming-toy/gaming-console.html?brand%5Bfilter%5D=SONY%2C481&page=1#ps5watch` |
+| Makro PRO | `https://www.makro.pro/th/c/search?q=ps5#ps5watch` |
 
-Open each bookmark in its own tab. Leave the four tabs open.
+Open each bookmark in its own tab. Leave the five tabs open.
 
 ## 4. Paste the settings (once)
 
@@ -55,7 +56,7 @@ A box shows in the corner of the tab. Fill in:
 3. **Healthchecks ping key.** From step 1.
 
 Click **Save**, then click **Test ping**. A message that says **💻 laptop** should arrive in Discord.
-All four store tabs share these settings, so you paste them only once.
+All five store tabs share these settings, so you paste them only once.
 
 If you think your Discord webhook link leaked, delete that webhook in Discord, make a new one, and paste the
 new link here (and into `.env`).
@@ -63,7 +64,7 @@ new link here (and into `.env`).
 ## 5. Set up Chrome
 
 1. **Settings → Performance → Always keep these sites active.** Add `powerbuy.co.th`, `bnn.in.th`,
-   `jib.co.th` and `dotlife.store`. ([Chrome help](https://support.google.com/chrome/answer/12929150))
+   `jib.co.th`, `dotlife.store` and `makro.pro`. ([Chrome help](https://support.google.com/chrome/answer/12929150))
 2. **Settings → On startup → Continue where you left off.**
 3. Make sure Chrome starts when you sign in to Windows.
    Then after a reboot and a sign-in, the watcher tabs come back by themselves.
@@ -81,6 +82,12 @@ new link here (and into `.env`).
 - **Do not use Chrome's "Duplicate tab" on a watcher tab.** The copy keeps the same tab identity,
   so you get two watchers. Open the bookmark instead.
 - **Don't shop in a watcher tab.** To buy, open the store in another tab and leave the watcher tab alone.
+
+## Makro PRO note
+
+Makro lists in-stock items first and shows only 20 per page. Sold-out consoles fall off that page,
+so the Makro box usually lists **no consoles**. That is normal. When a console comes back in stock it moves
+to the top and the tab pings. Consoles from marketplace sellers on Makro count too; the ping says who sells it.
 
 ## Pings
 
@@ -115,4 +122,4 @@ Tampermonkey gets new versions from the `main` branch by itself. It only updates
 `@version` number at the top of `ps5watch.user.js` goes up.
 
 To update right away: open the Tampermonkey dashboard, open the script and check for updates
-(or use the dashboard's update-check button), then reload the four watcher tabs.
+(or use the dashboard's update-check button), then reload the five watcher tabs.

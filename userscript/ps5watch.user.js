@@ -1,12 +1,13 @@
 // ==UserScript==
 // @name         PS5 watch (laptop)
 // @namespace    https://github.com/palmkungkrab/ps5snipe
-// @version      1.1.0
-// @description  Watches Powerbuy, Banana IT, JIB and Dotlife for PS5 consoles from real Chrome tabs
+// @version      1.2.0
+// @description  Watches Powerbuy, Banana IT, JIB, Dotlife and Makro PRO for PS5 consoles from real Chrome tabs
 // @match        https://www.powerbuy.co.th/*
 // @match        https://www.bnn.in.th/*
 // @match        https://www.jib.co.th/*
 // @match        https://www.dotlife.store/*
+// @match        https://www.makro.pro/*
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_xmlhttpRequest
@@ -44,6 +45,8 @@ PS5W.STORES = {
       query: '{products(filter:{category_uid:{eq:"MTY5NQ=="},brand:{eq:"481"}},pageSize:40){total_count items{__typename name url_key url_suffix stock_status only_x_left_in_stock price_range{minimum_price{final_price{value currency}}}}}}',
     },
   },
+  // Server-rendered search page (Next.js): product data with a stock flag is in __NEXT_DATA__, like Powerbuy.
+  makro: { key: 'makro', name: 'Makro PRO', host: 'www.makro.pro', searchPath: '/th/c/search?q=ps5', hcSlug: 'makro' },
 };
 
 PS5W.storeForHost = function storeForHost(host) {
@@ -97,13 +100,21 @@ PS5W.DEFAULT_EXCLUDE = [
 PS5W.CONTROLLER_RE = /controller|คอนโทรลเลอร์|dualsense|จอย/i;
 PS5W.CONSOLE_SIGN_RE = /\bbundle\b|\bcfi-[127]\d{3}|\b\d+\s*(tb|gb)\b|\bdigital\b|\bdisc\b|\b2nd\b|จอย\s*2\s*ตัว|\bchassis\b|game\s*console/i;
 
+const squashSpaces = (s) => String(s || '').split(/\s+/).filter(Boolean).join(' ');
+
+// An accessory word, or a controller without a console sign: never a console, whatever else the title says.
+PS5W.isAccessory = function isAccessory(title) {
+  const t = squashSpaces(title);
+  if (PS5W.DEFAULT_EXCLUDE.some((r) => r.test(t))) return true;
+  return PS5W.CONTROLLER_RE.test(t) && !PS5W.CONSOLE_SIGN_RE.test(t);
+};
+
 PS5W.isConsole = function isConsole(title) {
-  const t = String(title || '').split(/\s+/).filter(Boolean).join(' ');
+  const t = squashSpaces(title);
   if (!t) return false;
   if (!PS5W.DEFAULT_INCLUDE.some((r) => r.test(t))) return false;
   if (!PS5W.DEFAULT_REQUIRE.some((r) => r.test(t))) return false;
-  if (PS5W.DEFAULT_EXCLUDE.some((r) => r.test(t))) return false;
-  return !(PS5W.CONTROLLER_RE.test(t) && !PS5W.CONSOLE_SIGN_RE.test(t));
+  return !PS5W.isAccessory(t);
 };
 
 // ---------------------------------------------------------------- alerts
@@ -355,7 +366,7 @@ PS5W.renderBox = function renderBox(view) {
 <div class="hint">First time on this browser: paste these once. They're saved in this browser only, never in the public repo.</div>${errs}
 <label>Discord webhook link</label><input name="webhook" value="${esc(s.webhook)}" placeholder="https://discord.com/api/webhooks/…">
 <label>Your Discord user ID (for the @mention)</label><input name="userId" value="${esc(s.userId)}" placeholder="1234567890…">
-<label>Healthchecks ping key (one key; checks named powerbuy, banana-it, jib)</label><input name="hcKey" value="${esc(s.hcKey)}" placeholder="abc123…">
+<label>Healthchecks ping key (one key; checks named powerbuy, banana-it, jib, dotlife, makro)</label><input name="hcKey" value="${esc(s.hcKey)}" placeholder="abc123…">
 <div class="ft"><span>Shared by all store tabs</span><span><button class="b" data-act="test">Test ping</button> <button class="b" data-act="save">Save</button></span></div></div>`;
   }
   const time = view.lastCheck ? clock(view.lastCheck) : '';
@@ -727,6 +738,48 @@ PS5W.parseDotlife = function parseDotlife(status, text, origin) {
   return { blocked: false, products: [...byUrl.values()] };
 };
 
+// Makro PRO search page: __NEXT_DATA__ -> props.pageProps.initialSearchResult.hits[].document.
+// Each product has a Thai title and an English titleEn; inStock is 1 or 0. In-stock items come first and sold-out
+// consoles fall off the first page, so a normal page often lists no console at all. Marketplace sellers count too.
+const mkId = (d) => [d.productId, d.id].find(nonEmptyString) || null;
+const mkTitles = (d) => [d.title, d.titleEn].filter(nonEmptyString);
+const mkShapeOk = (d) => !!d && typeof d === 'object' && mkTitles(d).length > 0 && !!mkId(d) && typeof d.inStock === 'number';
+
+PS5W.parseMakro = function parseMakro(status, html, origin) {
+  const problem = PS5W.pageProblem(status, html);
+  if (problem) return { blocked: true, why: problem };
+  const m = /<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/.exec(String(html || ''));
+  let hits = null;
+  if (m) {
+    try { hits = JSON.parse(m[1]).props.pageProps.initialSearchResult.hits; } catch (e) { hits = null; }
+  }
+  if (!Array.isArray(hits)) return { blocked: true, why: NOT_NORMAL };
+  // "ps5" always finds accessories: an empty list means the search broke, not "nothing in stock".
+  if (!hits.length) return { blocked: true, why: 'Makro search listed no products' };
+  const docs = hits.map((h) => (h && typeof h === 'object' ? h.document : null));
+  if (!docs.some(mkShapeOk)) return { blocked: true, why: 'Makro product fields changed' };
+  const byUrl = new Map();
+  for (const d of docs) {
+    if (!d || typeof d !== 'object' || !mkId(d)) continue;
+    // Either title may name the console (Thai titles often spell PlayStation in Thai); an accessory word in either
+    // rules it out (the stand's Thai title says "for the PS5 console", its English one says "Vertical Stand").
+    const titles = mkTitles(d);
+    if (!titles.some(PS5W.isConsole) || titles.some(PS5W.isAccessory)) continue;
+    const url = PS5W.normalizeUrl(`${origin}/th/p/${mkId(d).trim()}`, origin);
+    if (!url || byUrl.has(url)) continue;
+    const known = d.inStock === 1 || d.inStock === 0;
+    const seller = nonEmptyString(d.seller) ? ` · sold by ${d.seller.trim()}` : '';
+    byUrl.set(url, {
+      title: titles[0],
+      url,
+      price: PS5W.formatPrice(d.displayPrice),
+      available: known ? d.inStock === 1 : null,
+      reason: known ? `search page stock flag${seller}` : 'stock fields missing',
+    });
+  }
+  return { blocked: false, products: [...byUrl.values()] };
+};
+
 // ---------------------------------------------------------------- runner
 // env: { fetchText(url, init?)->Promise<{status,text}>, sleep(ms), now(), random(), getItems(slug), setItems(slug, items),
 //        getFlags(), setFlags(flags), settings(), postDiscord(payload)->Promise<boolean>,
@@ -765,7 +818,7 @@ PS5W.discordReply = function discordReply(status, text) {
   return { status, retryAfterMs };
 };
 
-const SEARCH_PARSERS = { powerbuy: 'parsePowerbuy', banana: 'parseBanana' };
+const SEARCH_PARSERS = { powerbuy: 'parsePowerbuy', banana: 'parseBanana', makro: 'parseMakro' };
 
 // env.fetchText, with its rejection marked as a network error (anything else that throws is not one).
 async function fetchPage(env, url, init) {
